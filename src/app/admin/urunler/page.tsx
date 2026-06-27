@@ -1,0 +1,789 @@
+"use client";
+
+import { useState, useMemo, useEffect, useCallback } from "react";
+import { Search, Eye, Tag, Plus, X, Upload, CheckCircle2, Pencil, Trash2, Star } from "lucide-react";
+import Image from "next/image";
+import { db, storage } from "@/lib/firebase";
+import { collection, onSnapshot, doc, updateDoc, deleteDoc, addDoc, getDocs } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { products as staticProducts } from "@/data/products";
+
+export type Product = {
+  id: string;
+  name: string;
+  price: number;
+  images: string[];
+  category: string;
+  description: string;
+  features: string[];
+  colors: string[];
+  featured: boolean;
+  stockCode?: string;
+};
+
+const formatPrice = (price: number) =>
+  new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 2 }).format(price);
+
+type FormData = {
+  name: string;
+  price: string;
+  stockCode: string;
+  description: string;
+  category: string;
+  features: string;
+  colors: string;
+};
+
+const emptyForm: FormData = {
+  name: "",
+  price: "",
+  stockCode: "",
+  description: "",
+  category: "TV Üniteleri",
+  features: "",
+  colors: "",
+};
+
+export default function AdminUrunlerPage() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("Tümü");
+
+  // Modal states
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [detailProduct, setDetailProduct] = useState<Product | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+  // Toast
+  const [toastMsg, setToastMsg] = useState("");
+  const [showToast, setShowToast] = useState(false);
+
+  // Form
+  const [formData, setFormData] = useState<FormData>(emptyForm);
+  const [dragActive, setDragActive] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [uploadedFileName, setUploadedFileName] = useState("");
+
+  const [isSeeding, setIsSeeding] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  
+  useEffect(() => {
+    setMounted(true);
+    const unsubscribe = onSnapshot(
+      collection(db, "products"),
+      (snapshot) => {
+        const fetchedProducts = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as Product[];
+        setProducts(fetchedProducts);
+        setLoading(false);
+      },
+      (error) => {
+        console.error("Firestore okuma hatası:", error);
+        setLoading(false);
+      }
+    );
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (showToast) {
+      const timer = setTimeout(() => setShowToast(false), 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    if (isFormOpen || detailProduct) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "unset";
+    }
+    return () => { document.body.style.overflow = "unset"; };
+  }, [isFormOpen, detailProduct]);
+
+  const categories = useMemo(
+    () => ["Tümü", ...Array.from(new Set(products.map((p) => p.category)))],
+    [products]
+  );
+
+  const filteredProducts = useMemo(() => {
+    return products.filter((p) => {
+      const matchesSearch =
+        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.id.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesCategory =
+        selectedCategory === "Tümü" || p.category === selectedCategory;
+      return matchesSearch && matchesCategory;
+    });
+  }, [searchQuery, selectedCategory, products]);
+
+  const fireToast = (msg: string) => {
+    setToastMsg(msg);
+    setShowToast(true);
+  };
+
+  const resetAndCloseForm = useCallback(() => {
+    setIsFormOpen(false);
+    setEditingProduct(null);
+    setFormData(emptyForm);
+    setUploadedFile(null);
+    setUploadedFileName("");
+  }, []);
+
+  const openAddForm = () => {
+    setEditingProduct(null);
+    const nums = products
+      .map((p) => parseInt(p.stockCode || ""))
+      .filter((n) => !isNaN(n) && n > 0);
+    const nextNum = nums.length > 0 ? Math.max(...nums) + 1 : products.length + 1;
+    setFormData({ ...emptyForm, stockCode: String(nextNum) });
+    setUploadedFile(null);
+    setUploadedFileName("");
+    setIsFormOpen(true);
+  };
+
+  const openEditForm = (product: Product) => {
+    setEditingProduct(product);
+    setFormData({
+      name: product.name,
+      price: String(product.price),
+      stockCode: product.stockCode || product.id,
+      description: product.description,
+      category: product.category,
+      features: product.features?.join(", ") || "",
+      colors: product.colors?.join(", ") || "",
+    });
+    setUploadedFile(null);
+    setUploadedFileName("");
+    setDetailProduct(null);
+    setIsFormOpen(true);
+  };
+
+  const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const featuresArr = formData.features
+      .split(",")
+      .map((f) => f.trim())
+      .filter(Boolean);
+    const colorsArr = formData.colors
+      .split(",")
+      .map((c) => c.trim())
+      .filter(Boolean);
+
+    if (editingProduct) {
+      // Düzenleme modu
+      try {
+        const updateData: Record<string, unknown> = {
+          name: formData.name,
+          price: Number(formData.price),
+          description: formData.description,
+          category: formData.category,
+          features: featuresArr.length > 0 ? featuresArr : editingProduct.features,
+          colors: colorsArr.length > 0 ? colorsArr : editingProduct.colors,
+        };
+        if (uploadedFile) {
+          const storageRef = ref(storage, `products/${Date.now()}_${uploadedFile.name}`);
+          const snap = await uploadBytes(storageRef, uploadedFile);
+          updateData.images = [await getDownloadURL(snap.ref)];
+        }
+        await updateDoc(doc(db, "products", editingProduct.id), updateData);
+        fireToast("Ürün başarıyla güncellendi");
+      } catch (error) {
+        console.error("Ürün güncellenemedi:", error);
+      }
+    } else {
+      // Yeni ürün ekleme
+      let imageUrl = "/images/tv.png";
+      if (uploadedFile) {
+        try {
+          const storageRef = ref(storage, `products/${Date.now()}_${uploadedFile.name}`);
+          const snap = await uploadBytes(storageRef, uploadedFile);
+          imageUrl = await getDownloadURL(snap.ref);
+        } catch (uploadError) {
+          console.error("Görsel yüklenemedi:", uploadError);
+        }
+      }
+
+      const newProduct = {
+        stockCode: formData.stockCode,
+        name: formData.name,
+        price: Number(formData.price),
+        images: [imageUrl],
+        category: formData.category,
+        description: formData.description || "Henüz açıklama eklenmedi.",
+        features: featuresArr.length > 0 ? featuresArr : ["Yeni Ürün"],
+        colors: colorsArr.length > 0 ? colorsArr : ["Standart"],
+        featured: false,
+      };
+
+      try {
+        await addDoc(collection(db, "products"), newProduct);
+        fireToast("Ürün başarıyla eklendi");
+      } catch (error) {
+        console.error("Ürün eklenemedi:", error);
+      }
+    }
+
+    resetAndCloseForm();
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, "products", id));
+      setDeleteConfirm(null);
+      setDetailProduct(null);
+      fireToast("Ürün silindi");
+    } catch (error) {
+      console.error("Ürün silinemedi:", error);
+    }
+  };
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") setDragActive(true);
+    else if (e.type === "dragleave") setDragActive(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      setUploadedFile(file);
+      setUploadedFileName(file.name);
+    }
+  };
+
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setUploadedFile(file);
+      setUploadedFileName(file.name);
+    }
+  };
+
+  const featuredProducts = products.filter((p) => p.featured);
+
+  const handleToggleFeatured = async (product: Product) => {
+    if (!product.featured && featuredProducts.length >= 4) {
+      fireToast("Öne çıkan alanda en fazla 4 ürün olabilir.");
+      return;
+    }
+    try {
+      await updateDoc(doc(db, "products", product.id), { featured: !product.featured });
+    } catch (err) {
+      console.error("Featured güncelleme hatası:", err);
+    }
+  };
+
+  const handleSeedProducts = async () => {
+    const snap = await getDocs(collection(db, "products"));
+    if (!snap.empty) {
+      fireToast("Firebase'de zaten ürün var, yükleme atlandı.");
+      return;
+    }
+    setIsSeeding(true);
+    try {
+      for (const p of staticProducts) {
+        const { id: _id, ...rest } = p;
+        await addDoc(collection(db, "products"), rest);
+      }
+      fireToast(`${staticProducts.length} ürün Firebase'e yüklendi!`);
+    } catch (err) {
+      console.error("Seed hatası:", err);
+    } finally {
+      setIsSeeding(false);
+    }
+  };
+
+  if (!mounted) return null;
+
+  return (
+    <div className="p-8 md:p-12 w-full relative">
+      {/* ═══ Toast ═══ */}
+      <div
+        className={`fixed top-6 right-6 z-[200] flex items-center gap-3 bg-white border border-green-200 shadow-xl rounded-2xl px-6 py-4 transition-all duration-500 ${
+          showToast ? "translate-y-0 opacity-100" : "-translate-y-4 opacity-0 pointer-events-none"
+        }`}
+      >
+        <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
+        <span className="text-sm font-medium text-zinc-900">{toastMsg}</span>
+      </div>
+
+      {/* ═══ Başlık ═══ */}
+      <div className="mb-8 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-zinc-900 tracking-tight">Ürün Yönetimi</h1>
+          <p className="text-zinc-500 mt-2 font-light">
+            Mağazanızdaki {products.length} ürünü buradan yönetebilirsiniz.
+          </p>
+        </div>
+        <div className="flex items-center gap-3 self-start md:self-auto flex-wrap">
+          {!loading && products.length === 0 && (
+            <button
+              onClick={handleSeedProducts}
+              disabled={isSeeding}
+              className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3.5 rounded-xl font-semibold text-sm hover:bg-blue-700 transition-colors focus:outline-none focus:ring-4 focus:ring-blue-200 shadow-md disabled:opacity-60"
+            >
+              <Upload className="w-4 h-4" />
+              {isSeeding ? "Yükleniyor..." : "Varsayılan Ürünleri Yükle"}
+            </button>
+          )}
+
+          <button
+            onClick={openAddForm}
+            className="flex items-center gap-2 bg-zinc-900 text-white px-6 py-3.5 rounded-xl font-semibold text-sm hover:bg-black transition-colors focus:outline-none focus:ring-4 focus:ring-zinc-300 shadow-md"
+          >
+            <Plus className="w-4 h-4" />
+            Yeni Ürün Ekle
+          </button>
+        </div>
+      </div>
+
+      {/* ═══ Filtreler ═══ */}
+      <div className="flex flex-col md:flex-row gap-4 mb-8">
+        <div className="relative flex-1 max-w-md">
+          <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Ürün adı veya ID ile ara..."
+            className="w-full bg-zinc-50 border border-zinc-100 outline-none focus:ring-2 focus:ring-blue-200 pl-11 pr-4 py-3 rounded-xl text-sm text-zinc-900 transition-all placeholder:text-zinc-400"
+          />
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          {categories.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setSelectedCategory(cat)}
+              className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                selectedCategory === cat
+                  ? "bg-zinc-900 text-white"
+                  : "bg-zinc-50 text-zinc-600 hover:bg-zinc-100 border border-zinc-100"
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <p className="text-sm text-zinc-400 mb-4 font-light">
+        {filteredProducts.length} ürün gösteriliyor
+      </p>
+
+      {/* ═══ Öne Çıkan Ürünler Paneli ═══ */}
+      <div className="mb-8 bg-amber-50 border border-amber-200 rounded-2xl p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+            <h2 className="text-sm font-bold text-amber-900 uppercase tracking-wider">Öne Çıkan Ürünler</h2>
+          </div>
+          <span className={`text-xs font-bold px-3 py-1 rounded-full ${featuredProducts.length >= 4 ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
+            {featuredProducts.length} / 4
+          </span>
+        </div>
+        {featuredProducts.length === 0 ? (
+          <p className="text-sm text-amber-600 font-light">Henüz öne çıkan ürün yok. Tablodan ★ butonuna tıklayarak ekleyin.</p>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {featuredProducts.map((p) => (
+              <div key={p.id} className="flex items-center gap-2 bg-white rounded-xl px-3 py-2 border border-amber-200 shadow-sm">
+                <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 relative bg-zinc-100">
+                  <Image src={p.images?.[0] || "/images/tv.png"} alt={p.name} fill className="object-cover" />
+                </div>
+                <span className="text-xs font-medium text-zinc-800 truncate">{p.name}</span>
+                <button
+                  onClick={() => handleToggleFeatured(p)}
+                  className="ml-auto flex-shrink-0 text-amber-400 hover:text-red-400 transition-colors"
+                  title="Öne çıkandan kaldır"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+            {Array.from({ length: 4 - featuredProducts.length }).map((_, i) => (
+              <div key={`empty-${i}`} className="flex items-center justify-center h-12 rounded-xl border-2 border-dashed border-amber-200">
+                <span className="text-xs text-amber-300">Boş slot</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ═══ Tablo ═══ */}
+      <div className="bg-white border border-zinc-100 rounded-3xl overflow-hidden shadow-sm">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-zinc-100 text-left">
+              <th className="px-6 py-5 text-xs font-semibold text-zinc-500 uppercase tracking-wider">Ürün</th>
+              <th className="px-6 py-5 text-xs font-semibold text-zinc-500 uppercase tracking-wider hidden md:table-cell">Kategori</th>
+              <th className="px-6 py-5 text-xs font-semibold text-zinc-500 uppercase tracking-wider hidden lg:table-cell">Özellikler</th>
+              <th className="px-6 py-5 text-xs font-semibold text-zinc-500 uppercase tracking-wider text-right">Fiyat</th>
+              <th className="px-6 py-5 text-xs font-semibold text-zinc-500 uppercase tracking-wider text-center hidden md:table-cell">Öne Çıkan</th>
+              <th className="px-6 py-5 text-xs font-semibold text-zinc-500 uppercase tracking-wider text-center">İşlemler</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-zinc-50">
+            {loading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <tr key={i} className="animate-pulse">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-zinc-100"></div>
+                      <div className="space-y-2">
+                        <div className="h-4 bg-zinc-200 rounded w-24"></div>
+                        <div className="h-3 bg-zinc-100 rounded w-16"></div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 hidden md:table-cell"><div className="h-6 bg-zinc-100 rounded-full w-20"></div></td>
+                  <td className="px-6 py-4 hidden lg:table-cell"><div className="flex gap-1.5"><div className="w-12 h-5 bg-zinc-100 rounded-full"></div><div className="w-12 h-5 bg-zinc-100 rounded-full"></div></div></td>
+                  <td className="px-6 py-4 text-right"><div className="h-5 bg-zinc-200 rounded w-16 ml-auto"></div></td>
+                  <td className="px-6 py-4"><div className="flex items-center justify-center gap-2"><div className="w-8 h-8 bg-zinc-100 rounded-lg"></div><div className="w-8 h-8 bg-zinc-100 rounded-lg"></div><div className="w-8 h-8 bg-zinc-100 rounded-lg"></div></div></td>
+                </tr>
+              ))
+            ) : products.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-6 py-16 text-center">
+                  <p className="text-zinc-400 font-light mb-4">Firebase&apos;de henüz ürün yok.</p>
+                  <button
+                    onClick={handleSeedProducts}
+                    disabled={isSeeding}
+                    className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl font-semibold text-sm hover:bg-blue-700 transition-colors disabled:opacity-60"
+                  >
+                    <Upload className="w-4 h-4" />
+                    {isSeeding ? "Yükleniyor..." : "Varsayılan Ürünleri Firebase'e Yükle"}
+                  </button>
+                </td>
+              </tr>
+            ) : filteredProducts.map((product) => (
+              <tr key={product.id} className="hover:bg-zinc-50/50 transition-colors">
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-zinc-100 overflow-hidden flex-shrink-0 relative">
+                      <Image src={product.images?.[0] || "/images/tv.png"} alt={product.name} fill className="object-cover" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-zinc-900 truncate">{product.name}</p>
+                      <p className="text-xs text-zinc-400 mt-0.5 font-mono">{product.stockCode || product.id}</p>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-6 py-4 hidden md:table-cell">
+                  <span className="text-xs bg-zinc-50 text-zinc-600 px-3 py-1.5 rounded-full border border-zinc-100 font-medium">
+                    {product.category}
+                  </span>
+                </td>
+                <td className="px-6 py-4 hidden lg:table-cell">
+                  <div className="flex gap-1.5 flex-wrap">
+                    {product.features?.slice(0, 2).map((f) => (
+                      <span key={f} className="text-[10px] bg-blue-50 text-blue-600 px-2 py-1 rounded-full font-medium">{f}</span>
+                    ))}
+                  </div>
+                </td>
+                <td className="px-6 py-4 text-right">
+                  <span className="text-sm font-bold text-zinc-900">₺{formatPrice(product.price)}</span>
+                </td>
+                <td className="px-6 py-4 text-center hidden md:table-cell">
+                  <button
+                    onClick={() => handleToggleFeatured(product)}
+                    title={product.featured ? "Öne çıkandan kaldır" : featuredProducts.length >= 4 ? "Maksimum 4 ürün (önce birini kaldırın)" : "Öne çıkan yap"}
+                    className={`p-1.5 rounded-lg transition-all ${
+                      product.featured
+                        ? "text-amber-500 hover:text-amber-600 bg-amber-50 hover:bg-amber-100"
+                        : "text-zinc-300 hover:text-amber-400 hover:bg-amber-50"
+                    }`}
+                  >
+                    <Star className={`w-4 h-4 ${product.featured ? "fill-amber-500" : ""}`} />
+                  </button>
+                </td>
+                <td className="px-6 py-4">
+                  <div className="flex items-center justify-center gap-2">
+                    <button
+                      onClick={() => setDetailProduct(product)}
+                      className="text-xs text-blue-600 font-medium hover:text-blue-700 transition-colors px-2 py-1.5 rounded-lg hover:bg-blue-50"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => openEditForm(product)}
+                      className="text-xs text-amber-600 font-medium hover:text-amber-700 transition-colors px-2 py-1.5 rounded-lg hover:bg-amber-50"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setDeleteConfirm(product.id)}
+                      className="text-xs text-red-500 font-medium hover:text-red-600 transition-colors px-2 py-1.5 rounded-lg hover:bg-red-50"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ═══ Silme Onay Modalı ═══ */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setDeleteConfirm(null)} />
+          <div className="relative bg-white rounded-3xl shadow-2xl p-8 w-full max-w-sm text-center space-y-4">
+            <Trash2 className="w-10 h-10 text-red-400 mx-auto" />
+            <h3 className="text-lg font-bold text-zinc-900">Ürünü Silmek İstediğinize Emin Misiniz?</h3>
+            <p className="text-sm text-zinc-500 font-light">Bu işlem geri alınamaz.</p>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                className="flex-1 py-3.5 rounded-xl text-sm font-medium text-zinc-600 hover:bg-zinc-50 border border-zinc-200 transition-colors"
+              >
+                Vazgeç
+              </button>
+              <button
+                onClick={() => handleDelete(deleteConfirm)}
+                className="flex-1 py-3.5 rounded-xl text-sm font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors"
+              >
+                Evet, Sil
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ Detay Modalı ═══ */}
+      {detailProduct && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setDetailProduct(null)} />
+          <div className="relative bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden">
+            <div className="relative w-full h-64 bg-zinc-100">
+              <Image src={detailProduct.images?.[0] || "/images/tv.png"} alt={detailProduct.name} fill className="object-cover" />
+            </div>
+            <div className="p-8 space-y-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-zinc-900">{detailProduct.name}</h2>
+                  <p className="text-xs text-zinc-400 font-mono mt-1">{detailProduct.stockCode || detailProduct.id}</p>
+                </div>
+                <span className="text-lg font-bold text-zinc-900">₺{formatPrice(detailProduct.price)}</span>
+              </div>
+              <p className="text-sm text-zinc-500 font-light leading-relaxed">{detailProduct.description}</p>
+              <div className="flex flex-wrap gap-2 pt-2">
+                {detailProduct.features?.map((f) => (
+                  <span key={f} className="text-xs bg-zinc-50 text-zinc-600 px-3 py-1.5 rounded-full border border-zinc-100 font-medium flex items-center gap-1.5">
+                    <Tag className="w-3 h-3" />{f}
+                  </span>
+                ))}
+              </div>
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => openEditForm(detailProduct)}
+                  className="flex-1 bg-zinc-900 text-white py-3.5 rounded-xl font-medium hover:bg-black transition-colors flex items-center justify-center gap-2"
+                >
+                  <Pencil className="w-4 h-4" />
+                  Düzenle
+                </button>
+                <button
+                  onClick={() => setDetailProduct(null)}
+                  className="px-6 py-3.5 rounded-xl text-sm font-medium text-zinc-600 hover:bg-zinc-50 border border-zinc-200 transition-colors"
+                >
+                  Kapat
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ Ekle / Düzenle Drawer ═══ */}
+      <div
+        className={`fixed inset-0 z-[150] bg-black/40 backdrop-blur-sm transition-opacity duration-300 ${
+          isFormOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+        }`}
+        onClick={resetAndCloseForm}
+      />
+      <div
+        className={`fixed top-0 right-0 bottom-0 z-[160] w-full max-w-[520px] bg-white shadow-2xl flex flex-col transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+          isFormOpen ? "translate-x-0" : "translate-x-full"
+        }`}
+      >
+        <div className="flex items-center justify-between px-8 py-6 border-b border-zinc-100">
+          <h2 className="text-xl font-bold text-zinc-900 tracking-tight">
+            {editingProduct ? "Ürünü Düzenle" : "Yeni Ürün Ekle"}
+          </h2>
+          <button
+            onClick={resetAndCloseForm}
+            className="w-10 h-10 rounded-full hover:bg-zinc-100 flex items-center justify-center text-zinc-500 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form id="product-form" onSubmit={handleFormSubmit} className="flex-1 overflow-y-auto px-8 py-8 space-y-6">
+          {/* Görsel Yükleme */}
+          <div>
+            <label className="block text-sm font-medium text-zinc-700 mb-2">Ürün Görseli</label>
+
+            {/* Mevcut görsel önizleme — sadece düzenleme modunda */}
+            {editingProduct && editingProduct.images?.[0] && !uploadedFileName && (
+              <div className="relative w-full h-36 rounded-xl overflow-hidden mb-3 bg-zinc-100">
+                <Image src={editingProduct.images[0]} alt={editingProduct.name} fill className="object-contain" />
+                <div className="absolute bottom-0 left-0 right-0 bg-black/30 py-1 px-2">
+                  <span className="text-[10px] text-white/80 font-medium">Mevcut görsel — değiştirmek için aşağıya yükleyin</span>
+                </div>
+              </div>
+            )}
+
+            <div
+              onDragEnter={handleDrag}
+              onDragOver={handleDrag}
+              onDragLeave={handleDrag}
+              onDrop={handleDrop}
+              className={`relative w-full h-40 rounded-2xl border-2 border-dashed transition-all flex flex-col items-center justify-center gap-3 cursor-pointer ${
+                dragActive
+                  ? "border-blue-400 bg-blue-50/50"
+                  : uploadedFileName
+                  ? "border-green-300 bg-green-50/30"
+                  : "border-zinc-200 bg-zinc-50 hover:border-zinc-300 hover:bg-zinc-100/50"
+              }`}
+            >
+              <input type="file" accept="image/*" onChange={handleFileInput} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+              {uploadedFileName ? (
+                <>
+                  <CheckCircle2 className="w-7 h-7 text-green-500" />
+                  <span className="text-sm text-green-700 font-medium">{uploadedFileName}</span>
+                  <span className="text-xs text-zinc-400">Değiştirmek için tekrar tıklayın</span>
+                </>
+              ) : (
+                <>
+                  <Upload className={`w-7 h-7 ${dragActive ? "text-blue-500" : "text-zinc-400"}`} />
+                  <span className="text-sm text-zinc-500 font-medium">
+                    {editingProduct ? "Yeni Görsel Yükle" : "Görsel Sürükle veya Seç"}
+                  </span>
+                  <span className="text-xs text-zinc-400">PNG, JPG, WEBP — Maks 5MB</span>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Ürün Adı */}
+          <div>
+            <label className="block text-sm font-medium text-zinc-700 mb-2">Ürün Adı</label>
+            <input
+              type="text"
+              required
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              placeholder="Decoroys Premium TV Ünitesi"
+              className="w-full bg-zinc-50 border border-zinc-100 outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300 px-5 py-4 rounded-xl text-zinc-900 transition-all placeholder:text-zinc-400"
+            />
+          </div>
+
+          {/* Kategori */}
+          <div>
+            <label className="block text-sm font-medium text-zinc-700 mb-2">Kategori</label>
+            <select
+              value={formData.category}
+              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+              className="w-full bg-zinc-50 border border-zinc-100 outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300 px-5 py-4 rounded-xl text-zinc-900 transition-all appearance-none cursor-pointer"
+            >
+              <option value="TV Üniteleri">Tv Üniteleri</option>
+              <option value="Kahve Dolapları">Kahve Dolapları</option>
+              <option value="Tv Panelleri">Tv Panelleri</option>
+            </select>
+          </div>
+
+          {/* Fiyat & Stok Kodu */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-zinc-700 mb-2">Fiyat (₺)</label>
+              <input
+                type="number"
+                required
+                min="0"
+                step="0.01"
+                value={formData.price}
+                onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                placeholder="9200"
+                className="w-full bg-zinc-50 border border-zinc-100 outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300 px-5 py-4 rounded-xl text-zinc-900 transition-all placeholder:text-zinc-400"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-zinc-700 mb-2">Stok No</label>
+              <div className="w-full bg-zinc-100 border border-zinc-200 px-5 py-4 rounded-xl text-zinc-500 text-sm font-mono select-all">
+                #{formData.stockCode}
+              </div>
+            </div>
+          </div>
+
+          {/* Özellikler */}
+          <div>
+            <label className="block text-sm font-medium text-zinc-700 mb-2">
+              Özellikler <span className="text-zinc-400 font-light">(virgülle ayırın)</span>
+            </label>
+            <input
+              type="text"
+              value={formData.features}
+              onChange={(e) => setFormData({ ...formData, features: e.target.value })}
+              placeholder="200x45 cm, Mat Yüzey, Geniş Depolama"
+              className="w-full bg-zinc-50 border border-zinc-100 outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300 px-5 py-4 rounded-xl text-zinc-900 transition-all placeholder:text-zinc-400"
+            />
+          </div>
+
+          {/* Renkler */}
+          <div>
+            <label className="block text-sm font-medium text-zinc-700 mb-2">
+              Renkler <span className="text-zinc-400 font-light">(virgülle ayırın)</span>
+            </label>
+            <input
+              type="text"
+              value={formData.colors}
+              onChange={(e) => setFormData({ ...formData, colors: e.target.value })}
+              placeholder="Premium Siyah, Doğal Ahşap"
+              className="w-full bg-zinc-50 border border-zinc-100 outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300 px-5 py-4 rounded-xl text-zinc-900 transition-all placeholder:text-zinc-400"
+            />
+          </div>
+
+          {/* Açıklama */}
+          <div>
+            <label className="block text-sm font-medium text-zinc-700 mb-2">Ürün Açıklaması</label>
+            <textarea
+              rows={4}
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              placeholder="Modern yaşam alanları için tasarlanmış premium TV ünitesi..."
+              className="w-full bg-zinc-50 border border-zinc-100 outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300 px-5 py-4 rounded-xl text-zinc-900 transition-all placeholder:text-zinc-400 resize-none"
+            />
+          </div>
+        </form>
+
+        <div className="px-8 py-6 border-t border-zinc-100 flex items-center gap-4">
+          <button
+            type="button"
+            onClick={resetAndCloseForm}
+            className="px-6 py-4 text-sm font-medium text-zinc-500 hover:text-zinc-900 transition-colors"
+          >
+            Vazgeç
+          </button>
+          <button
+            type="submit"
+            form="product-form"
+            className="flex-1 bg-zinc-900 text-white py-4 rounded-xl font-semibold text-base hover:bg-black transition-colors focus:outline-none focus:ring-4 focus:ring-zinc-300 shadow-md"
+          >
+            {editingProduct ? "Değişiklikleri Kaydet" : "Ürünü Kaydet"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
