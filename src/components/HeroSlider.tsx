@@ -55,7 +55,7 @@ const slides: Slide[] = [
     cta: "Hemen İncele",
     ctaStyle: "apple-black",
     href: "/urun/zenna-tv-unitesi",
-    image: "/images/tv.png",
+    image: "/zenna.png",
     imageAlt: "Decoroys Zenna TV Ünitesi",
     imageRight: true,
     productSlug: "zenna-tv-unitesi",
@@ -220,6 +220,7 @@ export default function HeroSlider() {
   const [current, setCurrent] = useState(0);
   const [animKey, setAnimKey] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [imgLoaded, setImgLoaded] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { products } = useProductStore();
 
@@ -255,6 +256,10 @@ export default function HeroSlider() {
       (p) => p.id === slide.productSlug || toSlug(p.name) === slide.productSlug
     )?.images?.[0] ?? slide.image)
     : slide.image;
+
+  useEffect(() => {
+    setImgLoaded(false);
+  }, [resolvedImage]);
 
   return (
     <section
@@ -464,14 +469,31 @@ export default function HeroSlider() {
             />
 
             <div className="relative w-full max-w-md md:max-w-lg aspect-square">
+              {/* Katman 1: local fallback — hemen görünür */}
               <Image
-                src={resolvedImage}
+                src={slide.image}
                 alt={slide.imageAlt}
                 fill
                 className="object-contain drop-shadow-xl"
                 sizes="(max-width: 768px) 85vw, 45vw"
                 priority={slide.id === 0}
               />
+              {/* Katman 2: Firebase görseli — yüklenince üzerine crossfade */}
+              {resolvedImage !== slide.image && (
+                <div
+                  className="absolute inset-0 transition-opacity duration-700"
+                  style={{ opacity: imgLoaded ? 1 : 0 }}
+                >
+                  <Image
+                    src={resolvedImage}
+                    alt={slide.imageAlt}
+                    fill
+                    className="object-contain drop-shadow-xl"
+                    sizes="(max-width: 768px) 85vw, 45vw"
+                    onLoad={() => setImgLoaded(true)}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>

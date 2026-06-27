@@ -104,7 +104,7 @@ export default function UrunClient({ id }: Props) {
           className="relative aspect-[4/5] w-full bg-zinc-50 rounded-3xl overflow-hidden shadow-2xl"
         >
           <Image
-            src={product.images[0] || "/images/tv.png"}
+            src={product.images[0]}
             alt={product.name}
             fill
             className="object-cover"

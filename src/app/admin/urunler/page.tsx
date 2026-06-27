@@ -199,7 +199,7 @@ export default function AdminUrunlerPage() {
       }
     } else {
       // Yeni ürün ekleme
-      let imageUrl = "/images/tv.png";
+      let imageUrl = "";
       if (uploadedFile) {
         try {
           const storageRef = ref(storage, `products/${Date.now()}_${uploadedFile.name}`);
@@ -399,7 +399,7 @@ export default function AdminUrunlerPage() {
             {featuredProducts.map((p) => (
               <div key={p.id} className="flex items-center gap-2 bg-white rounded-xl px-3 py-2 border border-amber-200 shadow-sm">
                 <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 relative bg-zinc-100">
-                  <Image src={p.images?.[0] || "/images/tv.png"} alt={p.name} fill className="object-cover" />
+                  <Image src={p.images?.[0] || "/zenna.png"} alt={p.name} fill className="object-cover" />
                 </div>
                 <span className="text-xs font-medium text-zinc-800 truncate">{p.name}</span>
                 <button
@@ -471,7 +471,7 @@ export default function AdminUrunlerPage() {
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-xl bg-zinc-100 overflow-hidden flex-shrink-0 relative">
-                      <Image src={product.images?.[0] || "/images/tv.png"} alt={product.name} fill className="object-cover" />
+                      <Image src={product.images?.[0] || "/zenna.png"} alt={product.name} fill className="object-cover" />
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-zinc-900 truncate">{product.name}</p>
@@ -567,7 +567,7 @@ export default function AdminUrunlerPage() {
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setDetailProduct(null)} />
           <div className="relative bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden">
             <div className="relative w-full h-64 bg-zinc-100">
-              <Image src={detailProduct.images?.[0] || "/images/tv.png"} alt={detailProduct.name} fill className="object-cover" />
+              <Image src={detailProduct.images?.[0] || "/zenna.png"} alt={detailProduct.name} fill className="object-cover" />
             </div>
             <div className="p-8 space-y-4">
               <div className="flex items-start justify-between">

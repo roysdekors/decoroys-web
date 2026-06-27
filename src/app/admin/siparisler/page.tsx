@@ -280,7 +280,7 @@ export default function AdminSiparislerPage() {
                               <div key={idx} className="flex items-center gap-4 bg-white rounded-xl p-3 border border-zinc-100">
                                 <div className="w-12 h-12 rounded-lg bg-zinc-100 overflow-hidden flex-shrink-0 relative">
                                   <Image
-                                    src={item.image || "/images/tv.png"}
+                                    src={item.image || "/zenna.png"}
                                     alt={item.name}
                                     fill
                                     className="object-cover"
