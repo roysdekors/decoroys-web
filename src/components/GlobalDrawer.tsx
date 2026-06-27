@@ -4,24 +4,22 @@ import { useDrawerStore } from "@/store/useDrawerStore";
 import { useCartStore } from "@/store/useCartStore";
 import { X, Minus, Plus, ShoppingBag, User } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { motion } from "motion/react";
 import { auth, googleProvider, db } from "@/lib/firebase";
-import { signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, User as FirebaseUser, onAuthStateChanged, signOut } from "firebase/auth";
+import { signInWithPopup, User as FirebaseUser, onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc, setDoc, collection as fsCollection, query, where, getDocs } from "firebase/firestore";
 
 export default function GlobalDrawer() {
   const { isOpen, view, closeDrawer } = useDrawerStore();
   const { items, updateQuantity, removeItem } = useCartStore();
+  const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
 
-  const [isLoginView, setIsLoginView] = useState(true);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
   const [authError, setAuthError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   type OrderItem = { name: string; quantity: number; price: number; image?: string | null };
   type UserOrder = { id: string; status: string; total: number; createdAt: any; items: OrderItem[] };
@@ -71,40 +69,9 @@ export default function GlobalDrawer() {
     }
   };
 
-  const handleAuthSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError(null);
-    setIsSubmitting(true);
-    try {
-      if (isLoginView) {
-        const result = await signInWithEmailAndPassword(auth, email, password);
-        const user = result.user;
-        const userRef = doc(db, "users", user.uid);
-        const userSnap = await getDoc(userRef);
-        if (!userSnap.exists()) {
-          await setDoc(userRef, {
-            uid: user.uid,
-            displayName: user.displayName || email.split("@")[0],
-            email: user.email,
-            createdAt: new Date(),
-          });
-        }
-      } else {
-        const result = await createUserWithEmailAndPassword(auth, email, password);
-        const user = result.user;
-        const userRef = doc(db, "users", user.uid);
-        await setDoc(userRef, {
-          uid: user.uid,
-          displayName: name || email.split("@")[0],
-          email: user.email,
-          createdAt: new Date(),
-        });
-      }
-    } catch (error: any) {
-      setAuthError(getErrorMessage(error.code));
-    } finally {
-      setIsSubmitting(false);
-    }
+  const handleGuestCheckout = () => {
+    closeDrawer();
+    router.push("/odeme");
   };
 
   const handleGoogleLogin = async () => {
@@ -231,98 +198,124 @@ export default function GlobalDrawer() {
             </button>
           </div>
         ) : (
-          <div className="w-full flex flex-col flex-1 pb-safe">
-            <h3 className="text-xl font-medium text-zinc-900 mb-2 mt-2 text-center">Hoş Geldiniz</h3>
-            <p className="text-sm text-zinc-500 text-center mb-6 font-light px-4">
-              Alışverişe devam etmek ve siparişlerinizi takip etmek için giriş yapın.
-            </p>
-
-            <form onSubmit={handleAuthSubmit} className="space-y-4">
-              {!isLoginView && (
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1.5">Ad Soyad</label>
-                  <input
-                    type="text"
-                    placeholder="Ad Soyad"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full bg-zinc-100 border-none outline-none focus:ring-2 focus:ring-blue-200 px-4 py-3 rounded-lg text-zinc-900 placeholder:text-zinc-400 transition-all"
-                  />
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1.5">E-posta</label>
-                <input
-                  type="email"
-                  required
-                  placeholder="ornek@eposta.com"
-                  value={email}
-                  onChange={(e) => { setEmail(e.target.value); setAuthError(null); }}
-                  className="w-full bg-zinc-100 border-none outline-none focus:ring-2 focus:ring-blue-200 px-4 py-3 rounded-lg text-zinc-900 placeholder:text-zinc-400 transition-all"
-                />
+          <motion.div
+            className="w-full flex flex-col gap-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.35 }}
+          >
+            {/* Başlık */}
+            <motion.div
+              className="text-center pt-2 pb-1"
+              initial={{ opacity: 0, y: -16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.05, ease: [0.22, 0.6, 0.22, 1] }}
+            >
+              <div className="w-14 h-14 mx-auto mb-4 rounded-2xl flex items-center justify-center shadow-lg shadow-amber-200/60"
+                style={{ background: "linear-gradient(135deg, #f59e0b, #f97316)" }}>
+                <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+                </svg>
               </div>
-
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1.5">Şifre</label>
-                <input
-                  type="password"
-                  required
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => { setPassword(e.target.value); setAuthError(null); }}
-                  className="w-full bg-zinc-100 border-none outline-none focus:ring-2 focus:ring-blue-200 px-4 py-3 rounded-lg text-zinc-900 placeholder:text-zinc-400 transition-all"
-                />
-              </div>
-
-              {authError && (
-                <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{authError}</p>
-              )}
-
-              <div className="pt-2">
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-full bg-zinc-900 text-white py-3.5 rounded-lg font-medium hover:bg-zinc-800 transition-colors focus:outline-none focus:ring-4 focus:ring-blue-200 shadow-sm disabled:opacity-60 flex items-center justify-center gap-2"
-                >
-                  {isSubmitting && <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
-                  {isLoginView ? "Giriş Yap" : "Üye Ol"}
-                </button>
-              </div>
-            </form>
-
-            <div className="my-6 text-center">
-              <button
-                type="button"
-                onClick={() => { setIsLoginView(!isLoginView); setAuthError(null); setEmail(""); setPassword(""); setName(""); }}
-                className="text-sm font-light text-zinc-500 hover:text-zinc-800 transition-colors"
+              <h3
+                className="text-2xl font-black bg-clip-text text-transparent mb-1.5"
+                style={{
+                  backgroundImage: "linear-gradient(90deg, #f97316, #ec4899, #8b5cf6)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                }}
               >
-                {isLoginView
-                  ? "Hesabınız yok mu? Üye olun"
-                  : "Zaten hesabınız var mı? Giriş yapın"}
-              </button>
-            </div>
+                Hoş Geldiniz
+              </h3>
+              <p className="text-sm text-zinc-500 font-light leading-relaxed">
+                Siparişlerinizi takip etmek için giriş yapın<br />ya da üye olmadan devam edin.
+              </p>
+            </motion.div>
 
-            <div className="flex items-center gap-4 mb-6">
-              <div className="flex-1 border-t border-zinc-100"></div>
-              <span className="text-xs text-zinc-400 font-light">veya</span>
-              <div className="flex-1 border-t border-zinc-100"></div>
-            </div>
-
-            <button
+            {/* Google Butonu */}
+            <motion.button
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.15, ease: [0.22, 0.6, 0.22, 1] }}
+              whileHover={{ scale: 1.025, boxShadow: "0 8px 28px rgba(66,133,244,0.18)" }}
+              whileTap={{ scale: 0.97 }}
               onClick={() => { setAuthError(null); handleGoogleLogin(); }}
               type="button"
-              className="w-full bg-zinc-50 border border-zinc-200 text-zinc-900 py-3.5 rounded-lg font-medium flex items-center justify-center gap-3 hover:bg-zinc-100 transition-colors focus:outline-none focus:ring-4 focus:ring-zinc-100 shadow-sm"
+              className="w-full bg-white border-2 border-zinc-200 text-zinc-900 py-4 rounded-2xl font-semibold flex items-center justify-center gap-3 shadow-sm focus:outline-none focus:ring-4 focus:ring-blue-100"
             >
-              <svg className="w-5 h-5" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24">
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
                 <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
                 <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
                 <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
               </svg>
-              Google ile Giriş Yap
-            </button>
-          </div>
+              <span className="text-base">Google ile Giriş Yap</span>
+            </motion.button>
+
+            {authError && (
+              <motion.p
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-xs text-red-600 bg-red-50 border border-red-100 px-3 py-2.5 rounded-xl text-center"
+              >
+                {authError}
+              </motion.p>
+            )}
+
+            {/* Ayırıcı */}
+            <div className="flex items-center gap-3">
+              <div className="flex-1 border-t border-zinc-100" />
+              <span className="text-xs text-zinc-400 font-light">veya</span>
+              <div className="flex-1 border-t border-zinc-100" />
+            </div>
+
+            {/* Misafir Butonu */}
+            <motion.button
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.25, ease: [0.22, 0.6, 0.22, 1] }}
+              whileHover={{ scale: 1.025, boxShadow: "0 12px 36px rgba(249,115,22,0.30)" }}
+              whileTap={{ scale: 0.97 }}
+              type="button"
+              onClick={handleGuestCheckout}
+              className="w-full relative overflow-hidden rounded-2xl py-5 px-5 flex items-center gap-4 text-white focus:outline-none focus:ring-4 focus:ring-orange-300/40 shadow-lg shadow-orange-200"
+              style={{ background: "linear-gradient(135deg, #f59e0b 0%, #f97316 55%, #ef4444 100%)" }}
+            >
+              {/* parlaklık süpürme efekti */}
+              <motion.div
+                className="absolute inset-0 pointer-events-none"
+                style={{ background: "linear-gradient(105deg, transparent 35%, rgba(255,255,255,0.22) 50%, transparent 65%)" }}
+                animate={{ x: ["-100%", "200%"] }}
+                transition={{ duration: 2.2, repeat: Infinity, repeatDelay: 1.8, ease: "easeInOut" }}
+              />
+              <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+                </svg>
+              </div>
+              <div className="text-left flex-1">
+                <p className="font-bold text-base leading-tight">Üye Olmadan Devam Et</p>
+                <p className="text-xs text-orange-100 mt-0.5 font-light">Hızlıca sipariş ver, kayıt gerekmez</p>
+              </div>
+              <motion.svg
+                className="w-5 h-5 text-white/80 flex-shrink-0"
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+                animate={{ x: [0, 4, 0] }}
+                transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+              </motion.svg>
+            </motion.button>
+
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.4 }}
+              className="text-center text-xs text-zinc-400 font-light leading-relaxed"
+            >
+              Giriş yaparak siparişlerinizi takip<br />edebilir ve hızlıca tekrar sipariş verebilirsiniz.
+            </motion.p>
+          </motion.div>
         )}
       </div>
     </div>
