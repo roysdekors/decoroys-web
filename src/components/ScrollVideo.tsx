@@ -45,7 +45,7 @@ export default function ScrollVideo() {
   const indicatorOpacity = useTransform(scrollYProgress, [0, 0.05], [1, 0]);
 
   return (
-    <div ref={wrapperRef} className="relative h-[600vh]">
+    <div ref={wrapperRef} className="relative h-[300vh] md:h-[500vh] lg:h-[600vh]">
       {/* ── Sticky sahne ── */}
       <div className="sticky top-0 h-screen w-full overflow-hidden">
 

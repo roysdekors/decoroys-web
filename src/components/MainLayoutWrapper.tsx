@@ -167,6 +167,7 @@ export default function MainLayoutWrapper({ children }: { children: React.ReactN
               <Link href="/kategori/kahve-dolaplari" className="hover:text-black transition-colors w-fit">Kahve Dolapları</Link>
               <Link href="/kategori/tv-panelleri" className="hover:text-black transition-colors w-fit">TV Panelleri</Link>
               <Link href="/urunler" className="hover:text-black transition-colors w-fit">Tüm Ürünler</Link>
+              <Link href="/blog" className="hover:text-black transition-colors w-fit">Blog</Link>
             </div>
           </div>
 

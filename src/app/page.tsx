@@ -173,7 +173,7 @@ export default function Home() {
             </h2>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-10">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 sm:gap-7 lg:gap-10">
             {featuredProducts.map((product) => (
               <Link
                 href={`/urun/${product.id}`}
@@ -361,12 +361,12 @@ export default function Home() {
         />
 
         <div className="relative w-full max-w-6xl mx-auto px-6">
-          <p className="text-center text-xs font-semibold tracking-[0.4em] text-amber-500 uppercase mb-16">
+          <p className="text-center text-xs font-semibold tracking-[0.4em] text-amber-500 uppercase mb-8 md:mb-14">
             Rakamlar Konuşuyor
           </p>
 
           {/* Sayaçlar */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-0 divide-x divide-zinc-700/60">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-0 divide-x divide-zinc-700/20 lg:divide-zinc-700/60">
             {STATS.map((stat, i) => (
               <div key={i} className="flex flex-col items-center text-center px-6 py-8 group">
                 <div className="flex items-end gap-1 mb-3">
