@@ -16,9 +16,8 @@ export default function MainLayoutWrapper({ children }: { children: React.ReactN
   }, []);
   const isCheckout = pathname === "/odeme";
   const isAdmin = pathname.startsWith("/admin");
-  const isComingSoon = pathname === "/coming-soon";
 
-  if (isCheckout || isAdmin || isComingSoon) {
+  if (isCheckout || isAdmin) {
     return <main className="flex-1 flex flex-col relative w-full h-full">{children}</main>;
   }
 
