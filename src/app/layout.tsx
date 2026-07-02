@@ -64,6 +64,10 @@ export const metadata: Metadata = {
       "Minimalist çizgiler ve premium malzemelerle üretilmiş TV üniteleri, kahve dolapları ve daha fazlası.",
     images: ["https://www.decoroys.com/images/logo.png"],
   },
+  icons: {
+    icon: "/images/favicon.png",
+    apple: "/images/favicon.png",
+  },
 };
 
 /* ═══════════════════════════════════════════════
