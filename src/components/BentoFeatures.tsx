@@ -1,15 +1,9 @@
 "use client";
 
-import {
-  motion,
-  useMotionValue,
-  useSpring,
-  useTransform,
-  useScroll,
-} from "motion/react";
-import { Plus, X } from "lucide-react";
+import { useState } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import Image from "next/image";
-import { useState, useRef } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 interface Feature {
   id: string;
@@ -24,7 +18,7 @@ const features: Feature[] = [
     id: "feature-1",
     title: "Premium Malzemeler",
     subtitle: "Ustalıkla seçilmiş",
-    image: "/tiflis.jpg",
+    image: "/images/1.jpg",
     detailText:
       "Mobilyalarımızda kullanılan premium malzemeler, uzun ömürlü kullanım ve zamansız bir estetik sunar. Doğal ahşap ve gerçek taş kaplamalar, evinizin havasını değiştirir.",
   },
@@ -32,7 +26,7 @@ const features: Feature[] = [
     id: "feature-2",
     title: "Minimalist Çizgiler",
     subtitle: "Sade ve şık",
-    image: "/royal.png",
+    image: "/images/2.jpg",
     detailText:
       "Gereksiz detaylardan arındırılmış tasarımlarımız, negatif boşlukların gücünü kullanarak yaşam alanlarınıza huzur katar.",
   },
@@ -40,7 +34,7 @@ const features: Feature[] = [
     id: "feature-3",
     title: "Akıllı Kurulum",
     subtitle: "Aletsiz montaj",
-    image: "/begonia.png",
+    image: "/images/3.jpg",
     detailText:
       "Özel kilit mekanizmalarımız sayesinde, karmaşık el aletlerine ihtiyaç duymadan dakikalar içinde mobilyanızı kurabilirsiniz.",
   },
@@ -48,7 +42,7 @@ const features: Feature[] = [
     id: "feature-4",
     title: "Sürdürülebilirlik",
     subtitle: "Doğaya saygılı",
-    image: "/zenna.png",
+    image: "/images/4.jpg",
     detailText:
       "Üretim süreçlerimizin tamamında karbon ayak izimizi minimumda tutuyor, geri dönüştürülebilir ve sürdürülebilir materyaller tercih ediyoruz.",
   },
@@ -56,221 +50,188 @@ const features: Feature[] = [
     id: "feature-5",
     title: "Gizli Depolama",
     subtitle: "Kusursuz düzen",
-    image: "/royal.png",
+    image: "/images/5.jpg",
     detailText:
       "Kablolar, cihazlar ve diğer eşyalarınız için zekice tasarlanmış gizli depolama alanlarıyla göz yormayan bir düzen sağlayın.",
   },
 ];
 
-const EASE = [0.22, 0.6, 0.22, 1] as const;
-const SPRING = { stiffness: 220, damping: 22 };
+const SPRING = { type: "spring" as const, stiffness: 280, damping: 30 };
 
-/* ─── Tek kart bileşeni ─── */
-function FeatureCard({
-  feature,
-  isHero,
-  index,
-  onClick,
-}: {
-  feature: Feature;
-  isHero: boolean;
-  index: number;
-  onClick: (f: Feature) => void;
-}) {
-  const cardRef = useRef<HTMLDivElement>(null);
+function getCardProps(offset: number) {
+  const abs = Math.abs(offset);
+  const sign = Math.sign(offset) || 1;
 
-  /* Mouse 3D tilt */
-  const rawX = useMotionValue(0);
-  const rawY = useMotionValue(0);
-  const rotateX = useSpring(useTransform(rawY, [-0.5, 0.5], [14, -14]), SPRING);
-  const rotateY = useSpring(useTransform(rawX, [-0.5, 0.5], [-14, 14]), SPRING);
-
-  /* Specular parlaklık gradyanı */
-  const glowBg = useTransform(
-    [rawX, rawY],
-    ([mx, my]: number[]) =>
-      `radial-gradient(ellipse at ${(mx + 0.5) * 100}% ${(my + 0.5) * 100}%, rgba(255,255,255,0.18) 0%, transparent 65%)`
-  );
-
-  /* Scroll parallax — image */
-  const { scrollYProgress } = useScroll({
-    target: cardRef,
-    offset: ["start end", "end start"],
-  });
-  const imgY = useTransform(scrollYProgress, [0, 1], ["14%", "-14%"]);
-
-  const onMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!cardRef.current) return;
-    const r = cardRef.current.getBoundingClientRect();
-    rawX.set((e.clientX - r.left) / r.width - 0.5);
-    rawY.set((e.clientY - r.top) / r.height - 0.5);
-  };
-  const onMouseLeave = () => {
-    rawX.set(0);
-    rawY.set(0);
-  };
-
-  /* Entrance: hero → soldan, diğerleri → aşağıdan */
-  const initial = isHero
-    ? { opacity: 0, x: -80, scale: 0.92 }
-    : { opacity: 0, y: 70, scale: 0.92 };
-  const animate = isHero
-    ? { opacity: 1, x: 0, scale: 1 }
-    : { opacity: 1, y: 0, scale: 1 };
-
-  return (
-    /* Perspective wrapper — taşıyor col/row span'ı */
-    <div
-      className={isHero ? "md:col-span-2 md:row-span-2" : "col-span-1 row-span-1"}
-      style={{ perspective: "1100px" }}
-    >
-      <motion.div
-        ref={cardRef}
-        style={{ rotateX, rotateY }}
-        initial={initial}
-        whileInView={animate}
-        transition={{ duration: 0.85, delay: index * 0.11, ease: EASE }}
-        viewport={{ once: true, amount: 0.15 }}
-        onMouseMove={onMouseMove}
-        onMouseLeave={onMouseLeave}
-        onClick={() => onClick(feature)}
-        className="group relative w-full h-full rounded-3xl overflow-hidden cursor-pointer bg-zinc-100"
-      >
-        {/* Specular parlaklık */}
-        <motion.div
-          className="absolute inset-0 pointer-events-none z-10 rounded-3xl"
-          style={{ background: glowBg }}
-        />
-
-        {/* Scroll parallax image */}
-        <div className="absolute inset-0 overflow-hidden">
-          <motion.div
-            className="absolute inset-0 w-full h-full"
-            style={{ y: imgY, scale: 1.22 }}
-          >
-            <Image
-              src={feature.image}
-              alt={feature.title}
-              fill
-              className="object-cover"
-            />
-          </motion.div>
-          {/* Gradient overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
-        </div>
-
-        {/* Metin */}
-        <div className="absolute inset-0 p-6 flex flex-col justify-end z-20">
-          <motion.span
-            initial={{ opacity: 0, y: 14 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.25 + index * 0.1, ease: EASE }}
-            viewport={{ once: true, amount: 0.2 }}
-            className="text-white/70 font-medium text-sm tracking-widest uppercase mb-1.5 transition-all duration-300 group-hover:text-white/95 group-hover:tracking-[0.22em]"
-          >
-            {feature.subtitle}
-          </motion.span>
-          <motion.h3
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.55, delay: 0.33 + index * 0.1, ease: EASE }}
-            viewport={{ once: true, amount: 0.2 }}
-            className={`font-bold text-white leading-tight transition-transform duration-300 group-hover:translate-x-2 ${
-              isHero ? "text-3xl md:text-4xl" : "text-xl"
-            }`}
-          >
-            {feature.title}
-          </motion.h3>
-        </div>
-
-        {/* Artı butonu */}
-        <motion.div
-          className="absolute bottom-6 right-6 w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white z-20 border border-white/10"
-          whileHover={{ backgroundColor: "rgba(255,255,255,0.5)", rotate: 90, scale: 1.1 }}
-          transition={{ duration: 0.25 }}
-        >
-          <Plus className="w-5 h-5" />
-        </motion.div>
-      </motion.div>
-    </div>
-  );
+  if (abs === 0)
+    return { x: 0,          rotateY: 0,          scale: 1,    opacity: 1,    z: 0,    zIndex: 20, blur: 0   };
+  if (abs === 1)
+    return { x: sign * 265, rotateY: sign * -42,  scale: 0.80, opacity: 0.76, z: -180, zIndex: 15, blur: 1.5 };
+  if (abs === 2)
+    return { x: sign * 415, rotateY: sign * -60,  scale: 0.62, opacity: 0.35, z: -360, zIndex: 10, blur: 3.5 };
+  return   { x: sign * 520, rotateY: sign * -72,  scale: 0.48, opacity: 0,    z: -500, zIndex: 5,  blur: 6   };
 }
 
-/* ─── Ana bileşen ─── */
 export default function BentoFeatures() {
-  const [selectedFeature, setSelectedFeature] = useState<Feature | null>(null);
+  const [active, setActive] = useState(0);
+
+  const prev = () => setActive((i) => Math.max(i - 1, 0));
+  const next = () => setActive((i) => Math.min(i + 1, features.length - 1));
+
+  const handlePanEnd = (
+    _: unknown,
+    info: { offset: { x: number }; velocity: { x: number } }
+  ) => {
+    if (info.offset.x < -55 && info.velocity.x <= 0) next();
+    else if (info.offset.x > 55 && info.velocity.x >= 0) prev();
+  };
 
   return (
-    <>
-      {/* Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6 auto-rows-[250px] md:auto-rows-[300px]">
-        {features.map((feature, index) => (
-          <FeatureCard
-            key={feature.id}
-            feature={feature}
-            isHero={index === 0}
-            index={index}
-            onClick={setSelectedFeature}
-          />
-        ))}
+    <div className="w-full select-none">
+      {/* ── 3D Carousel Stage ── */}
+      <motion.div
+        className="relative h-[420px] md:h-[460px] overflow-hidden cursor-grab active:cursor-grabbing"
+        style={{ perspective: "1400px" }}
+        onPanEnd={handlePanEnd}
+      >
+        {features.map((feature, index) => {
+          const offset = index - active;
+          const { x, rotateY, scale, opacity, z, zIndex, blur } = getCardProps(offset);
+          const isActive = offset === 0;
+
+          return (
+            <motion.div
+              key={feature.id}
+              animate={{ x, rotateY, scale, opacity, z }}
+              transition={SPRING}
+              style={{
+                position: "absolute",
+                top: "50%",
+                left: "50%",
+                marginTop: "-200px",
+                marginLeft: "-140px",
+                width: "280px",
+                height: "400px",
+                zIndex,
+                filter: `blur(${blur}px)`,
+                transitionProperty: "filter",
+                transitionDuration: "380ms",
+                transitionTimingFunction: "ease",
+                borderRadius: "20px",
+                overflow: "hidden",
+                willChange: "transform",
+                cursor: isActive ? "default" : "pointer",
+              }}
+              onClick={() => !isActive && setActive(index)}
+            >
+              <Image
+                src={feature.image}
+                alt={feature.title}
+                fill
+                className="object-cover"
+                draggable={false}
+              />
+
+              {/* Gradient overlay */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/5" />
+
+              {/* Text */}
+              <div className="absolute bottom-0 left-0 right-0 p-5 z-10">
+                <span className="block text-white/55 text-[9px] tracking-[0.25em] uppercase font-semibold mb-1.5">
+                  {feature.subtitle}
+                </span>
+                <h3
+                  className={`text-white font-bold leading-snug transition-all duration-300 ${
+                    isActive ? "text-[1.25rem]" : "text-sm opacity-55"
+                  }`}
+                >
+                  {feature.title}
+                </h3>
+              </div>
+
+              {/* Active ring */}
+              <div
+                className={`absolute inset-0 pointer-events-none transition-opacity duration-300 ${
+                  isActive ? "opacity-100" : "opacity-0"
+                }`}
+                style={{
+                  borderRadius: "20px",
+                  boxShadow:
+                    "inset 0 0 0 1.5px rgba(255,255,255,0.22), inset 0 0 28px rgba(255,255,255,0.06)",
+                }}
+              />
+            </motion.div>
+          );
+        })}
+      </motion.div>
+
+      {/* ── Detail text ── */}
+      <div className="mt-5 min-h-[96px] flex flex-col items-center justify-start px-4">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={active}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.3, ease: [0.22, 0.6, 0.22, 1] }}
+            className="flex flex-col items-center gap-2.5 max-w-lg w-full"
+          >
+            {/* Gradient subtitle badge */}
+            <span
+              className="text-[10px] font-bold tracking-[0.28em] uppercase"
+              style={{
+                background: "linear-gradient(90deg, #f97316, #ec4899, #8b5cf6)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text",
+              }}
+            >
+              {features[active].subtitle}
+            </span>
+            {/* Gradient separator */}
+            <div className="w-10 h-px rounded-full bg-gradient-to-r from-orange-400 via-rose-400 to-violet-500" />
+            {/* Description */}
+            <p className="text-center text-base md:text-lg text-zinc-800 font-normal leading-relaxed">
+              {features[active].detailText}
+            </p>
+          </motion.div>
+        </AnimatePresence>
       </div>
 
-      {/* Modal */}
-      <motion.div
-        animate={
-          selectedFeature
-            ? { opacity: 1, pointerEvents: "auto" as const }
-            : { opacity: 0, pointerEvents: "none" as const }
-        }
-        transition={{ duration: 0.3 }}
-        className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6"
-      >
-        <div
-          className="absolute inset-0 bg-black/45 backdrop-blur-sm"
-          onClick={() => setSelectedFeature(null)}
-        />
-        <motion.div
-          animate={
-            selectedFeature
-              ? { opacity: 1, y: 0, scale: 1 }
-              : { opacity: 0, y: 36, scale: 0.95 }
-          }
-          transition={{ duration: 0.4, ease: EASE }}
-          className="relative bg-white w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl"
+      {/* ── Navigation ── */}
+      <div className="flex items-center justify-center gap-5 mt-5">
+        <button
+          onClick={prev}
+          disabled={active === 0}
+          aria-label="Önceki"
+          className="w-10 h-10 rounded-full bg-zinc-100 hover:bg-zinc-200 disabled:opacity-25 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
         >
-          <button
-            onClick={() => setSelectedFeature(null)}
-            className="absolute top-4 right-4 z-10 w-10 h-10 bg-white/80 backdrop-blur-sm rounded-full flex items-center justify-center text-zinc-900 hover:bg-white transition-colors shadow-sm"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <ChevronLeft className="w-4 h-4 text-zinc-700" />
+        </button>
 
-          {selectedFeature && (
-            <div className="flex flex-col">
-              <div className="relative w-full h-[300px] sm:h-[400px] bg-zinc-100">
-                <Image
-                  src={selectedFeature.image}
-                  alt={selectedFeature.title}
-                  fill
-                  className="object-cover"
-                />
-              </div>
-              <div className="p-8 sm:p-10 space-y-4">
-                <span className="text-blue-600 font-semibold text-sm tracking-widest uppercase">
-                  {selectedFeature.subtitle}
-                </span>
-                <h2 className="text-3xl sm:text-4xl font-bold text-zinc-900 tracking-tight">
-                  {selectedFeature.title}
-                </h2>
-                <div className="w-12 h-1 bg-zinc-200 rounded-full my-6" />
-                <p className="text-lg text-zinc-600 leading-relaxed font-light">
-                  {selectedFeature.detailText}
-                </p>
-              </div>
-            </div>
-          )}
-        </motion.div>
-      </motion.div>
-    </>
+        <div className="flex items-center gap-1.5">
+          {features.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setActive(i)}
+              aria-label={`Kart ${i + 1}`}
+              className={`rounded-full transition-all duration-300 ${
+                i === active
+                  ? "w-6 h-2 bg-zinc-900"
+                  : "w-2 h-2 bg-zinc-300 hover:bg-zinc-400"
+              }`}
+            />
+          ))}
+        </div>
+
+        <button
+          onClick={next}
+          disabled={active === features.length - 1}
+          aria-label="Sonraki"
+          className="w-10 h-10 rounded-full bg-zinc-100 hover:bg-zinc-200 disabled:opacity-25 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+        >
+          <ChevronRight className="w-4 h-4 text-zinc-700" />
+        </button>
+      </div>
+    </div>
   );
 }

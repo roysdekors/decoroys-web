@@ -6,7 +6,7 @@ import { useCartStore } from "@/store/useCartStore";
 import { useDrawerStore } from "@/store/useDrawerStore";
 import BentoFeatures from "@/components/BentoFeatures";
 import HeroSlider from "@/components/HeroSlider";
-import DynamicIslandBanner from "@/components/DynamicIslandBanner";
+import ScrollVideo from "@/components/ScrollVideo";
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { motion } from "motion/react";
@@ -21,26 +21,26 @@ const STATS = [
 ];
 
 const REVIEWS = [
-  { name: "Çiğdem B.", city: "İstanbul", initials: "ÇB", color: "bg-amber-500", text: "TV ünitemiz geldiğinde gerçekten etkilendik. Fotoğraflarda güzeldi ama elinize alınca kalite bambaşka bir his veriyor. Montaj da çok kolaydı, yarım saatte bitti.", product: "Premium TV Ünitesi" },
-  { name: "Mehmet T.", city: "Ankara", initials: "MT", color: "bg-rose-500", text: "Minimalist çizgileri ve doğal ahşap dokusuyla tam aradığım mobilyayı buldum. Oturma odamızın karakterini tamamen değiştirdi. Kesinlikle tavsiye ederim.", product: "Minimalist Sehpa" },
-  { name: "Selin A.", city: "İzmir", initials: "SA", color: "bg-emerald-500", text: "3 yıldır Decoroys müşterisiyim. Her ürün bir öncekinden daha iyi. Müşteri hizmetleri de süper ilgili. Ev taşıdım ve tüm mobilyalarımı yeniledim.", product: "Yatak Odası Koleksiyonu" },
-  { name: "Fatma Y.", city: "Bursa", initials: "FY", color: "bg-violet-500", text: "Oturma odamı tamamen yeniledim, Decoroys mobilyaları olmadan düşünemiyorum artık. Tasarım detayları muhteşem, her misafirim soruyor.", product: "Oturma Odası Takımı" },
-  { name: "Can Ö.", city: "Antalya", initials: "CÖ", color: "bg-sky-500", text: "Siparişim 4 günde kapımda. Paketleme de çok özenli, hiçbir çizik yok. Kaliteye para ödenmeye değer.", product: "Kitaplık" },
-  { name: "Zeynep B.", city: "Eskişehir", initials: "ZB", color: "bg-teal-500", text: "Fiyat kalite dengesi inanılmaz. Aynı kalitede başka markalarda 3 katı ödeyecektim. Decoroys'u bulduğuma çok sevindim.", product: "Konsol Masa" },
-  { name: "Hasan K.", city: "Konya", initials: "HK", color: "bg-orange-500", text: "İki haftada sipariş verdim ve kapımda. Hem hızlı hem de ürün beklentimin üzerinde. Tavsiye ediyorum.", product: "Ayaklı Sehpa" },
-  { name: "Merve Ş.", city: "Adana", initials: "MŞ", color: "bg-pink-500", text: "Ahşap işçiliği gerçekten el emeği göz nuru. Fabrika ürünü gibi değil, özel yapılmış hissi veriyor. Çevremdekiler de çok beğendi.", product: "Ahşap Raf Sistemi" },
-  { name: "Ali D.", city: "Gaziantep", initials: "AD", color: "bg-indigo-500", text: "Ürün soruları için mesaj attım, çok hızlı ve nazikçe yanıtladılar. Satın alma sonrası destek de harika.", product: "TV Sehpası" },
-  { name: "Elif N.", city: "Trabzon", initials: "EN", color: "bg-lime-600", text: "Doğal malzeme kullanımı çok belli. Evimde bir doğa parçası var gibi hissettiriyor. Renk tonları da müthiş seçilmiş.", product: "Doğal Ahşap Sehpa" },
-  { name: "Serkan M.", city: "Kayseri", initials: "SM", color: "bg-cyan-500", text: "İlk alışverişimden sonra ikinci siparişimi hemen verdim. Bu sefer iki ürün aldım, ikisi de harika çıktı.", product: "Orta Sehpa Seti" },
-  { name: "Derya C.", city: "Samsun", initials: "DC", color: "bg-fuchsia-500", text: "Hediye olarak aldım, çok beğenildi. Kutusu bile özel, armağan paketi gibi geldi. Markanın detay hassasiyeti var.", product: "Dekoratif Kitaplık" },
-  { name: "Burak T.", city: "Diyarbakır", initials: "BT", color: "bg-amber-600", text: "Ahşap kalitesinden şüphe etmiyorum. Yıllarca kullanacak bir mobilya aldım. Paranın değerini fazlasıyla karşılıyor.", product: "Masif Sehpa" },
-  { name: "Neslihan A.", city: "Kocaeli", initials: "NA", color: "bg-rose-600", text: "Yeni evimize taşındık ve tüm mobilyaları Decoroys'tan aldık. Her biri birbirini tamamlıyor, çok uyumlu bir koleksiyon.", product: "Salon Koleksiyonu" },
-  { name: "Okan Y.", city: "Mersin", initials: "OY", color: "bg-emerald-600", text: "Çocuk odası için aldık. Sağlam ve güvenli malzeme. Küçüğümüz de çok sevdi, her gün övünüyor.", product: "Çocuk Odası Rafı" },
-  { name: "Gülşen P.", city: "Malatya", initials: "GP", color: "bg-violet-600", text: "Renk seçenekleri çok geniş. Tam istediğim tona ulaştım. Evimin duvarlarıyla mükemmel uyum sağladı.", product: "Duvar Rafı" },
-  { name: "Tolga R.", city: "Denizli", initials: "TR", color: "bg-sky-600", text: "3 yıldır düzenli alışveriş yapıyorum. Kalite hiç düşmedi, aksine her yeni üründe daha da ileri gitmişler.", product: "TV Standı" },
-  { name: "Hande K.", city: "Sivas", initials: "HK", color: "bg-orange-600", text: "Sipariş verdikten 3 gün sonra geldi. Bu hız beni şaşırttı. Ürün de harika, sökülüp takılabilir.", product: "Modüler Raf" },
-  { name: "Yusuf S.", city: "Erzurum", initials: "YS", color: "bg-teal-600", text: "5 yıl garanti veriyorlar ve buna güveniyorlar. Kaliteli ürün satan firma garanti verir, Decoroys öyle bir firma.", product: "Premium Sehpa" },
-  { name: "Reyhan E.", city: "Sakarya", initials: "RE", color: "bg-pink-600", text: "İlk ürünü çok beğendim, 3 ay içinde 4 ürün daha aldım. Artık tüm mobilya ihtiyacımı Decoroys'tan karşılıyorum.", product: "Salon Seti" },
+  { name: "Çiğdem B.", city: "İstanbul", initials: "ÇB", color: "bg-amber-500", text: "TV ünitemiz geldiğinde gerçekten etkilendik. Fotoğraflarda güzeldi ama elinize alınca kalite bambaşka bir his veriyor. Montaj da çok kolaydı, yarım saatte bitti.", product: "TV Ünitesi" },
+  { name: "Mehmet T.", city: "Ankara", initials: "MT", color: "bg-rose-500", text: "Minimalist çizgileri ve doğal ahşap dokusuyla tam aradığım mobilyayı buldum. Oturma odamızın karakterini tamamen değiştirdi. Kesinlikle tavsiye ederim.", product: "TV Ünitesi" },
+  { name: "Selin A.", city: "İzmir", initials: "SA", color: "bg-emerald-500", text: "3 yıldır Decoroys müşterisiyim. Her ürün bir öncekinden daha iyi. Müşteri hizmetleri de süper ilgili. Ev taşıdım ve tüm mobilyalarımı yeniledim.", product: "TV Ünitesi" },
+  { name: "Fatma Y.", city: "Bursa", initials: "FY", color: "bg-violet-500", text: "Oturma odamı tamamen yeniledim, Decoroys mobilyaları olmadan düşünemiyorum artık. Tasarım detayları muhteşem, her misafirim soruyor.", product: "TV Ünitesi" },
+  { name: "Can Ö.", city: "Antalya", initials: "CÖ", color: "bg-sky-500", text: "Siparişim 4 günde kapımda. Paketleme de çok özenli, hiçbir çizik yok. Kaliteye para ödenmeye değer.", product: "TV Ünitesi" },
+  { name: "Zeynep B.", city: "Eskişehir", initials: "ZB", color: "bg-teal-500", text: "Fiyat kalite dengesi inanılmaz. Aynı kalitede başka markalarda 3 katı ödeyecektim. Decoroys'u bulduğuma çok sevindim.", product: "TV Ünitesi" },
+  { name: "Hasan K.", city: "Konya", initials: "HK", color: "bg-orange-500", text: "İki haftada sipariş verdim ve kapımda. Hem hızlı hem de ürün beklentimin üzerinde. Tavsiye ediyorum.", product: "TV Ünitesi" },
+  { name: "Merve Ş.", city: "Adana", initials: "MŞ", color: "bg-pink-500", text: "Ahşap işçiliği gerçekten el emeği göz nuru. Fabrika ürünü gibi değil, özel yapılmış hissi veriyor. Çevremdekiler de çok beğendi.", product: "TV Ünitesi" },
+  { name: "Ali D.", city: "Gaziantep", initials: "AD", color: "bg-indigo-500", text: "Ürün soruları için mesaj attım, çok hızlı ve nazikçe yanıtladılar. Satın alma sonrası destek de harika.", product: "TV Ünitesi" },
+  { name: "Elif N.", city: "Trabzon", initials: "EN", color: "bg-lime-600", text: "Doğal malzeme kullanımı çok belli. Evimde bir doğa parçası var gibi hissettiriyor. Renk tonları da müthiş seçilmiş.", product: "TV Ünitesi" },
+  { name: "Serkan M.", city: "Kayseri", initials: "SM", color: "bg-cyan-500", text: "İlk alışverişimden sonra ikinci siparişimi hemen verdim. Bu sefer iki ürün aldım, ikisi de harika çıktı.", product: "TV Ünitesi" },
+  { name: "Derya C.", city: "Samsun", initials: "DC", color: "bg-fuchsia-500", text: "Hediye olarak aldım, çok beğenildi. Kutusu bile özel, armağan paketi gibi geldi. Markanın detay hassasiyeti var.", product: "TV Ünitesi" },
+  { name: "Burak T.", city: "Diyarbakır", initials: "BT", color: "bg-amber-600", text: "Ahşap kalitesinden şüphe etmiyorum. Yıllarca kullanacak bir mobilya aldım. Paranın değerini fazlasıyla karşılıyor.", product: "TV Ünitesi" },
+  { name: "Neslihan A.", city: "Kocaeli", initials: "NA", color: "bg-rose-600", text: "Yeni evimize taşındık ve tüm mobilyaları Decoroys'tan aldık. Her biri birbirini tamamlıyor, çok uyumlu bir koleksiyon.", product: "TV Ünitesi" },
+  { name: "Okan Y.", city: "Mersin", initials: "OY", color: "bg-emerald-600", text: "Çocuk odası için aldık. Sağlam ve güvenli malzeme. Küçüğümüz de çok sevdi, her gün övünüyor.", product: "TV Ünitesi" },
+  { name: "Gülşen P.", city: "Malatya", initials: "GP", color: "bg-violet-600", text: "Renk seçenekleri çok geniş. Tam istediğim tona ulaştım. Evimin duvarlarıyla mükemmel uyum sağladı.", product: "TV Ünitesi" },
+  { name: "Tolga R.", city: "Denizli", initials: "TR", color: "bg-sky-600", text: "3 yıldır düzenli alışveriş yapıyorum. Kalite hiç düşmedi, aksine her yeni üründe daha da ileri gitmişler.", product: "TV Ünitesi" },
+  { name: "Hande K.", city: "Sivas", initials: "HK", color: "bg-orange-600", text: "Sipariş verdikten 3 gün sonra geldi. Bu hız beni şaşırttı. Ürün de harika, sökülüp takılabilir.", product: "TV Ünitesi" },
+  { name: "Yusuf S.", city: "Erzurum", initials: "YS", color: "bg-teal-600", text: "5 yıl garanti veriyorlar ve buna güveniyorlar. Kaliteli ürün satan firma garanti verir, Decoroys öyle bir firma.", product: "TV Ünitesi" },
+  { name: "Reyhan E.", city: "Sakarya", initials: "RE", color: "bg-pink-600", text: "İlk ürünü çok beğendim, 3 ay içinde 4 ürün daha aldım. Artık tüm mobilya ihtiyacımı Decoroys'tan karşılıyorum.", product: "TV Ünitesi" },
 ];
 
 export default function Home() {
@@ -101,121 +101,14 @@ export default function Home() {
   return (
     <div className="flex-1 flex flex-col w-full">
 
-      {/* ═══════ Banner Üst Video ═══════ */}
-      <DynamicIslandBanner />
-
       {/* ═══════ 1. Hero Slider ═══════ */}
       <HeroSlider />
 
-      {/* ═══════ 2. Animated Title Section ═══════ */}
-      <section className="w-full flex flex-col items-center text-center px-6 pt-10 pb-2">
-        <h1 className="text-5xl md:text-7xl font-bold tracking-tight animate-fade-in-up animate-gradient-breathe bg-gradient-to-r from-amber-700 via-orange-500 to-yellow-600 bg-clip-text text-transparent leading-[1.18] pb-2">
-          Decoroys Mobilya Tasarım
-        </h1>
-      </section>
-
-      {/* ═══════ 3. Animation Video + Kenar Dekorasyonları ═══════ */}
-      <div className="w-full relative mt-6 mb-0">
-
-        {/* Sol kenar — dikey etiket + dekor */}
-        <div className="hidden xl:flex absolute left-4 2xl:left-10 top-1/2 -translate-y-1/2 flex-col items-center gap-5 z-10">
-          {/* Dikey yazı */}
-          <span
-            className="text-[13px] font-black tracking-[0.35em] text-amber-600 uppercase"
-            style={{
-              writingMode: "vertical-rl",
-              transform: "rotate(180deg)",
-              animation: "char-float 6s ease-in-out infinite, glow-pulse 3s ease-in-out infinite",
-            }}
-          >
-            Premium Mobilya
-          </span>
-          {/* Dekor çizgi + nokta */}
-          <div className="flex flex-col items-center gap-1.5">
-            <div className="w-px h-12 bg-gradient-to-b from-transparent via-amber-400/50 to-transparent" />
-            <div className="w-2 h-2 rounded-full bg-amber-400/70" style={{ animation: "char-float 3s ease-in-out infinite" }} />
-            <div className="w-px h-8 bg-gradient-to-b from-amber-400/50 to-transparent" />
-          </div>
-          {/* Küçük dekoratif SVG — mobilya silueti */}
-          <svg viewBox="0 0 40 60" className="w-8 opacity-20" fill="none" stroke="#b45309" strokeWidth="1.5">
-            <rect x="4" y="30" width="32" height="18" rx="3" />
-            <rect x="4" y="28" width="32" height="4" rx="1" />
-            <line x1="10" y1="48" x2="10" y2="56" />
-            <line x1="30" y1="48" x2="30" y2="56" />
-            <rect x="8" y="34" width="10" height="10" rx="2" />
-            <rect x="22" y="34" width="10" height="10" rx="2" />
-          </svg>
-        </div>
-
-        {/* Sağ kenar — özellik rozetleri */}
-        <div className="hidden xl:flex absolute right-4 2xl:right-10 top-1/2 -translate-y-1/2 flex-col items-end gap-3 z-10">
-          {[
-            { icon: "✦", label: "El İşçiliği", delay: "0s", bg: "bg-amber-50", border: "border-amber-200", iconCls: "text-amber-600", textCls: "text-amber-800" },
-            { icon: "◈", label: "Premium Malzemeler", delay: "0.6s", bg: "bg-orange-50", border: "border-orange-200", iconCls: "text-orange-500", textCls: "text-orange-800" },
-            { icon: "◆", label: "Kolay Kurulum", delay: "1.2s", bg: "bg-yellow-50", border: "border-yellow-200", iconCls: "text-yellow-600", textCls: "text-yellow-800" },
-          ].map((item) => (
-            <div
-              key={item.label}
-              className={`flex items-center gap-2 ${item.bg} backdrop-blur-sm border ${item.border} rounded-full px-4 py-2 shadow-sm`}
-              style={{ animation: `char-float 5s ease-in-out infinite`, animationDelay: item.delay }}
-            >
-              <span className={`${item.iconCls} text-sm`}>{item.icon}</span>
-              <span className={`text-sm font-semibold ${item.textCls} whitespace-nowrap`}>{item.label}</span>
-            </div>
-          ))}
-          {/* Alt dekor */}
-          <div className="flex flex-col items-center gap-1.5 mt-2">
-            <div className="w-px h-8 bg-gradient-to-b from-amber-400/50 to-transparent" />
-            <div className="w-1.5 h-1.5 rounded-full bg-amber-300/80" style={{ animation: "char-float 4s ease-in-out infinite reverse" }} />
-            <div className="w-px h-12 bg-gradient-to-b from-transparent via-amber-400/40 to-transparent" />
-          </div>
-        </div>
-
-        {/* Paragraf — videoya yakın */}
-        <div className="w-full max-w-2xl mx-auto px-6 mb-6 text-center">
-          <motion.p
-            initial={{ opacity: 0, y: 28 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, ease: [0.22, 0.6, 0.22, 1] }}
-            viewport={{ once: true, amount: 0.5 }}
-            className="text-lg md:text-xl text-zinc-500 font-medium leading-relaxed"
-          >
-            {"Hiç mümkün olduğunu düşünmediğiniz bir şıklık seviyesini keşfedin. Evinize modernlik ve sadeliği getiriyoruz."
-              .split(" ")
-              .map((word, i) => (
-                <motion.span
-                  key={i}
-                  initial={{ opacity: 0, y: 12 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.45, delay: i * 0.04, ease: [0.22, 0.6, 0.22, 1] }}
-                  viewport={{ once: true, amount: 0.5 }}
-                  className="inline-block mr-1.5"
-                >
-                  {word}
-                </motion.span>
-              ))}
-          </motion.p>
-        </div>
-
-        {/* Video */}
-        <section className="w-full max-w-5xl mx-auto px-6">
-          <div className="relative w-full aspect-square md:aspect-[21/9]">
-            <div className="absolute inset-0 bg-zinc-50 rounded-[2.5rem] shadow-sm overflow-hidden border border-zinc-100">
-              <video
-                src="/animasyon.mp4"
-                autoPlay
-                loop
-                muted
-                playsInline
-                className="w-full h-full object-cover"
-              />
-            </div>
-          </div>
-        </section>
-      </div>
+      {/* ═══════ 3. Scroll Video ═══════ */}
+      <ScrollVideo />
 
       {/* ═══════ 4. Öne Çıkan Koleksiyonlar ═══════ */}
-      <div className="w-full relative mt-32">
+      <div className="w-full relative mt-10">
 
         {/* Sol kenar */}
         <div className="hidden xl:flex absolute left-4 2xl:left-10 top-1/2 -translate-y-1/2 flex-col items-center gap-5 z-10">
@@ -273,8 +166,8 @@ export default function Home() {
           </div>
         </div>
 
-        <section className="w-full max-w-6xl mx-auto mb-20 px-6 relative">
-          <div className="text-center mb-16">
+        <section className="w-full max-w-6xl mx-auto mb-6 px-6 relative">
+          <div className="text-center mb-8">
             <h2 className="text-3xl font-light tracking-tight text-zinc-900">
               Öne Çıkan Koleksiyonlar
             </h2>
@@ -324,7 +217,7 @@ export default function Home() {
           </div>
 
           {/* View All Button */}
-          <div className="text-center mt-16">
+          <div className="text-center mt-8">
             <Link
               href="/urunler"
               className="inline-flex items-center gap-2 px-8 py-3.5 rounded-full border border-zinc-200 text-zinc-600 hover:text-zinc-900 hover:border-zinc-300 hover:bg-zinc-50 transition-all duration-300 text-sm font-medium"
@@ -336,7 +229,7 @@ export default function Home() {
       </div>
 
       {/* ═══════ 5. Neden Decoroys? — BentoFeatures ═══════ */}
-      <div className="w-full relative mt-32">
+      <div className="w-full relative mt-8">
 
         {/* Sol kenar */}
         <motion.div
@@ -402,7 +295,7 @@ export default function Home() {
         </div>
 
         <section className="w-full max-w-7xl mx-auto px-6">
-          <div className="text-center mb-16 space-y-5">
+          <div className="text-center mb-8 space-y-4">
             {/* Başlık — kelime kelime animasyon */}
             <h2 className="text-3xl md:text-5xl font-bold tracking-tight">
               {["Neden", "Decoroys?"].map((word, wi) => (
@@ -456,7 +349,7 @@ export default function Home() {
       </div>
 
       {/* ═══════ 6. Sayılarla Decoroys ═══════ */}
-      <section ref={statsRef} className="w-full mt-32 py-20 bg-zinc-900 overflow-hidden relative">
+      <section ref={statsRef} className="w-full mt-10 py-16 bg-zinc-900 overflow-hidden relative">
         {/* Arka plan desen */}
         <div className="absolute inset-0 opacity-[0.03]" style={{
           backgroundImage: "repeating-linear-gradient(45deg, #fff 0, #fff 1px, transparent 0, transparent 50%)",
@@ -552,7 +445,7 @@ export default function Home() {
       </section>
 
       {/* ═══════ 7. Müşteri Yorumları ═══════ */}
-      <section className="w-full mt-32 mb-8 overflow-hidden">
+      <section className="w-full mt-10 mb-4 overflow-hidden">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-16 space-y-3">
             <p className="text-xs font-semibold tracking-[0.4em] text-amber-600 uppercase">Müşterilerimiz Anlatıyor</p>

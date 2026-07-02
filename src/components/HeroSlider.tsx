@@ -51,14 +51,13 @@ const slides: Slide[] = [
     },
     title: "Zarif Dokunuşlar",
     titleStyle: "handwriting-gradient",
-    subtitle: "Zenna TV Ünitesi ile modern dokunuş.",
+    subtitle: "Decoroys TV Üniteleri ile modern dokunuş.",
     cta: "Hemen İncele",
     ctaStyle: "apple-black",
-    href: "/urun/zenna-tv-unitesi",
-    image: "/zenna.png",
+    href: "/kategori/tv-uniteleri",
+    image: "/images/1.jpg",
     imageAlt: "Decoroys Zenna TV Ünitesi",
     imageRight: true,
-    productSlug: "zenna-tv-unitesi",
   },
   {
     id: 1,
@@ -71,11 +70,11 @@ const slides: Slide[] = [
     title: "Yaza Özel İndirim Rüzgarı",
     titleStyle: "warm-gradient",
     subtitle:
-      "Tüm Decoroys koleksiyonlarında seçili ürünlerde sepette ekstra %10 indirim sizi bekliyor.",
+      "Tüm Decoroys koleksiyonlarında sadeliği ve ışığı bir arada bulacaksınız.",
     cta: "Fırsatları Yakala",
     ctaStyle: "apple-orange",
     href: "/urunler",
-    image: "/images/summer-sale.png",
+    image: "/images/4.jpg",
     imageAlt: "Decoroys Yaz Kampanyası",
     imageRight: false,
   },
@@ -287,7 +286,7 @@ export default function HeroSlider() {
       ))}
 
       {/* ── Sol kenar dekorasyonu ── */}
-      <div className="hidden 2xl:flex absolute left-14 top-1/2 -translate-y-1/2 flex-col items-center gap-4 z-20">
+      <div className="hidden 2xl:flex absolute left-24 top-1/2 -translate-y-1/2 flex-col items-center gap-4 z-20">
         {/* Üst mobilya ikonu */}
         <div style={{ animation: "char-float 5s ease-in-out infinite", animationDelay: "0.2s" }}>
           <FurnitureIcon color={accent} />
@@ -295,7 +294,7 @@ export default function HeroSlider() {
 
         {/* Üst dikey yazı */}
         <span
-          className="text-[11px] font-black tracking-[0.35em] uppercase transition-all duration-500"
+          className="text-[15px] font-black tracking-[0.35em] uppercase transition-all duration-500"
           style={{
             writingMode: "vertical-rl",
             transform: "rotate(180deg)",
@@ -319,7 +318,7 @@ export default function HeroSlider() {
 
         {/* Dikey yazı — slayta özgü renk + glow */}
         <span
-          className="text-[13px] font-black tracking-[0.35em] uppercase transition-all duration-500"
+          className="text-[15px] font-black tracking-[0.35em] uppercase transition-all duration-500"
           style={{
             writingMode: "vertical-rl",
             transform: "rotate(180deg)",
@@ -342,39 +341,6 @@ export default function HeroSlider() {
         <div style={{ animation: "char-float 5s ease-in-out infinite reverse", animationDelay: "0.6s" }}>
           <FurnitureIcon color={accent} />
         </div>
-      </div>
-
-      {/* ── Aile görseli — tek kart ── */}
-      <div
-        className="hidden lg:flex absolute z-10 flex-col items-center gap-2"
-        style={{ left: "clamp(72px, 8vw, 140px)", bottom: "10%", animation: "char-float 7s ease-in-out infinite" }}
-      >
-        <div
-          style={{
-            position: "relative",
-            width: "92px",
-            height: "122px",
-            borderRadius: "14px",
-            overflow: "hidden",
-            border: "2.5px solid rgba(255,255,255,0.92)",
-            boxShadow: "0 8px 32px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.08)",
-            transform: "rotate(-3deg)",
-            background: "rgba(255,255,255,0.6)",
-          }}
-        >
-          <Image
-            src="/aile.png"
-            alt="Decoroys Aile"
-            fill
-            style={{ objectFit: "contain" }}
-          />
-        </div>
-        <span
-          className="text-[9px] font-black tracking-[0.25em] uppercase transition-colors duration-500"
-          style={{ color: accent, filter: `drop-shadow(0 0 4px ${accent}80)` }}
-        >
-          Mutlu Aileler ✦
-        </span>
       </div>
 
       {/* ── Sağ kenar dekorasyonu ── */}
