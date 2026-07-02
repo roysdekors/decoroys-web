@@ -14,7 +14,7 @@ export default function MainLayoutWrapper({ children }: { children: React.ReactN
   useEffect(() => {
     return initProductStore();
   }, []);
-  const isCheckout = pathname === "/odeme";
+  const isCheckout = pathname.startsWith("/odeme");
   const isAdmin = pathname.startsWith("/admin");
 
   if (isCheckout || isAdmin) {

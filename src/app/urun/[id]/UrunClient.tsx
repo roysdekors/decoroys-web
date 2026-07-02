@@ -6,7 +6,7 @@ import { useDrawerStore } from "@/store/useDrawerStore";
 import { Truck, ShieldCheck, Sparkles } from "lucide-react";
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import { useState } from "react";
 
 const formatPrice = (price: number) =>
@@ -51,6 +51,7 @@ export default function UrunClient({ id }: Props) {
   const { addItem } = useCartStore();
   const { openDrawer } = useDrawerStore();
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
+  const [activeIndex, setActiveIndex]     = useState(0);
 
   if (loading) {
     return (
@@ -77,6 +78,16 @@ export default function UrunClient({ id }: Props) {
   const product = products.find((p) => p.id === id || toSlug(p.name) === id);
   if (!product) notFound();
 
+  // ── Geriye dönük uyumluluk: eski 'image: string' veya boş dizi ──
+  const imageList: string[] = (() => {
+    if (Array.isArray(product.images) && product.images.some(Boolean)) {
+      return product.images.filter(Boolean);
+    }
+    const legacy = (product as unknown as Record<string, unknown>)["image"];
+    if (typeof legacy === "string" && legacy) return [legacy];
+    return ["/images/logo.png"];
+  })();
+
   const activeColor = selectedColor ?? product.colors?.[0] ?? "Standart";
 
   const handleAddToCart = () => {
@@ -96,29 +107,91 @@ export default function UrunClient({ id }: Props) {
     <div className="bg-white min-h-screen py-16 md:py-24">
       <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-start">
 
-        {/* ── Sol: Görsel ── */}
+        {/* ── Sol: Galeri ── */}
         <motion.div
           initial={{ opacity: 0, x: -48, scale: 0.96 }}
           animate={{ opacity: 1, x: 0, scale: 1 }}
           transition={{ duration: 0.75, ease: EASE }}
-          className="relative aspect-[4/5] w-full bg-zinc-50 rounded-3xl overflow-hidden shadow-2xl"
+          className="flex flex-col gap-4"
         >
-          <Image
-            src={product.images[0]}
-            alt={product.name}
-            fill
-            className="object-cover"
-            priority
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent pointer-events-none" />
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.45, ease: EASE }}
-            className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm rounded-full px-4 py-1.5 text-xs font-bold text-zinc-600 uppercase tracking-widest shadow-sm"
-          >
-            {product.category}
-          </motion.div>
+          {/* Ana görsel */}
+          <div className="relative aspect-[4/5] w-full bg-zinc-50 rounded-3xl overflow-hidden shadow-2xl">
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={activeIndex}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.22, ease: "easeInOut" }}
+                className="absolute inset-0"
+              >
+                <Image
+                  src={imageList[activeIndex]}
+                  alt={`${product.name} — görsel ${activeIndex + 1}`}
+                  fill
+                  className="object-cover"
+                  priority={activeIndex === 0}
+                />
+              </motion.div>
+            </AnimatePresence>
+
+            {/* Alt gradient */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent pointer-events-none" />
+
+            {/* Kategori etiketi */}
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.45, ease: EASE }}
+              className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm rounded-full px-4 py-1.5 text-xs font-bold text-zinc-600 uppercase tracking-widest shadow-sm"
+            >
+              {product.category}
+            </motion.div>
+
+            {/* Görsel sayacı — birden fazla görsel varsa */}
+            {imageList.length > 1 && (
+              <div className="absolute bottom-4 right-4 bg-black/50 backdrop-blur-sm rounded-full px-3 py-1 text-[11px] font-semibold text-white">
+                {activeIndex + 1} / {imageList.length}
+              </div>
+            )}
+          </div>
+
+          {/* Thumbnail şeridi — yalnızca 1'den fazla görsel varsa */}
+          {imageList.length > 1 && (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.55, ease: EASE }}
+              className="flex gap-3"
+            >
+              {imageList.map((src, i) => (
+                <button
+                  key={i}
+                  onClick={() => setActiveIndex(i)}
+                  aria-label={`Görsel ${i + 1}`}
+                  className={`relative flex-1 aspect-square rounded-xl overflow-hidden border-2 transition-all duration-300 focus:outline-none ${
+                    i === activeIndex
+                      ? "border-zinc-900 shadow-md scale-100 opacity-100"
+                      : "border-zinc-200 opacity-50 scale-95 hover:opacity-80 hover:border-zinc-400"
+                  }`}
+                >
+                  <Image
+                    src={src}
+                    alt={`${product.name} thumbnail ${i + 1}`}
+                    fill
+                    className="object-cover"
+                  />
+                  {/* Seçili overlay halkası */}
+                  {i === activeIndex && (
+                    <motion.div
+                      layoutId="gallery-active-ring"
+                      className="absolute inset-0 rounded-[10px] border-2 border-zinc-900 pointer-events-none"
+                    />
+                  )}
+                </button>
+              ))}
+            </motion.div>
+          )}
         </motion.div>
 
         {/* ── Sağ: İçerik ── */}

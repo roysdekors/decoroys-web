@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
-import { Search, Eye, Tag, Plus, X, Upload, CheckCircle2, Pencil, Trash2, Star } from "lucide-react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { Search, Eye, Tag, Plus, X, Upload, CheckCircle2, Pencil, Trash2, Star, ImagePlus } from "lucide-react";
 import Image from "next/image";
 import { db, storage } from "@/lib/firebase";
 import { collection, onSnapshot, doc, updateDoc, deleteDoc, addDoc, getDocs } from "firebase/firestore";
@@ -44,48 +44,49 @@ const emptyForm: FormData = {
   colors: "",
 };
 
+const MAX_IMAGES = 3;
+
 export default function AdminUrunlerPage() {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-  
-  const [searchQuery, setSearchQuery] = useState("");
+  const [products, setProducts]     = useState<Product[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [searchQuery, setSearchQuery]       = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Tümü");
 
   // Modal states
-  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isFormOpen, setIsFormOpen]       = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [detailProduct, setDetailProduct] = useState<Product | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [detailProduct, setDetailProduct]   = useState<Product | null>(null);
+  const [deleteConfirm, setDeleteConfirm]   = useState<string | null>(null);
 
   // Toast
-  const [toastMsg, setToastMsg] = useState("");
+  const [toastMsg, setToastMsg]   = useState("");
+  const [toastType, setToastType] = useState<"success" | "warning">("success");
   const [showToast, setShowToast] = useState(false);
 
   // Form
-  const [formData, setFormData] = useState<FormData>(emptyForm);
+  const [formData, setFormData]     = useState<FormData>(emptyForm);
   const [dragActive, setDragActive] = useState(false);
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [uploadedFileName, setUploadedFileName] = useState("");
+
+  // ── Çoklu görsel state ──────────────────────────────────────
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [previewUrls, setPreviewUrls]     = useState<string[]>([]);
+  const previewUrlsRef = useRef<string[]>([]);
+  // previewUrlsRef her zaman güncel listeyi tutar (URL revoke için)
+  useEffect(() => { previewUrlsRef.current = previewUrls; }, [previewUrls]);
+  // ────────────────────────────────────────────────────────────
 
   const [isSeeding, setIsSeeding] = useState(false);
-  const [mounted, setMounted] = useState(false);
-  
+  const [mounted, setMounted]     = useState(false);
+
   useEffect(() => {
     setMounted(true);
     const unsubscribe = onSnapshot(
       collection(db, "products"),
       (snapshot) => {
-        const fetchedProducts = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as Product[];
-        setProducts(fetchedProducts);
+        setProducts(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) as Product[]);
         setLoading(false);
       },
-      (error) => {
-        console.error("Firestore okuma hatası:", error);
-        setLoading(false);
-      }
+      (error) => { console.error("Firestore okuma hatası:", error); setLoading(false); }
     );
     return () => unsubscribe();
   }, []);
@@ -98,11 +99,7 @@ export default function AdminUrunlerPage() {
   }, [showToast]);
 
   useEffect(() => {
-    if (isFormOpen || detailProduct) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "unset";
-    }
+    document.body.style.overflow = (isFormOpen || !!detailProduct) ? "hidden" : "unset";
     return () => { document.body.style.overflow = "unset"; };
   }, [isFormOpen, detailProduct]);
 
@@ -122,18 +119,25 @@ export default function AdminUrunlerPage() {
     });
   }, [searchQuery, selectedCategory, products]);
 
-  const fireToast = (msg: string) => {
+  const fireToast = (msg: string, type: "success" | "warning" = "success") => {
     setToastMsg(msg);
+    setToastType(type);
     setShowToast(true);
   };
+
+  // Revoke mevcut preview URL'lerini temizle (memory leak önlemi)
+  const revokeAllPreviews = useCallback(() => {
+    previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+  }, []);
 
   const resetAndCloseForm = useCallback(() => {
     setIsFormOpen(false);
     setEditingProduct(null);
     setFormData(emptyForm);
-    setUploadedFile(null);
-    setUploadedFileName("");
-  }, []);
+    setUploadedFiles([]);
+    revokeAllPreviews();
+    setPreviewUrls([]);
+  }, [revokeAllPreviews]);
 
   const openAddForm = () => {
     setEditingProduct(null);
@@ -142,91 +146,127 @@ export default function AdminUrunlerPage() {
       .filter((n) => !isNaN(n) && n > 0);
     const nextNum = nums.length > 0 ? Math.max(...nums) + 1 : products.length + 1;
     setFormData({ ...emptyForm, stockCode: String(nextNum) });
-    setUploadedFile(null);
-    setUploadedFileName("");
+    setUploadedFiles([]);
+    revokeAllPreviews();
+    setPreviewUrls([]);
     setIsFormOpen(true);
   };
 
   const openEditForm = (product: Product) => {
     setEditingProduct(product);
     setFormData({
-      name: product.name,
-      price: String(product.price),
-      stockCode: product.stockCode || product.id,
+      name:        product.name,
+      price:       String(product.price),
+      stockCode:   product.stockCode || product.id,
       description: product.description,
-      category: product.category,
-      features: product.features?.join(", ") || "",
-      colors: product.colors?.join(", ") || "",
+      category:    product.category,
+      features:    product.features?.join(", ") || "",
+      colors:      product.colors?.join(", ")   || "",
     });
-    setUploadedFile(null);
-    setUploadedFileName("");
+    setUploadedFiles([]);
+    revokeAllPreviews();
+    setPreviewUrls([]);
     setDetailProduct(null);
     setIsFormOpen(true);
   };
 
+  // ── Dosya işleme yardımcıları ────────────────────────────────
+  const handleFiles = useCallback(
+    (incoming: File[]) => {
+      const imageFiles = incoming.filter((f) => f.type.startsWith("image/"));
+      const merged = [...uploadedFiles, ...imageFiles];
+
+      if (merged.length > MAX_IMAGES) {
+        fireToast(`En fazla ${MAX_IMAGES} görsel yükleyebilirsiniz. İlk ${MAX_IMAGES} seçildi.`, "warning");
+      }
+
+      const limited = merged.slice(0, MAX_IMAGES);
+
+      // Eski URL'leri temizle
+      previewUrlsRef.current.forEach((u) => URL.revokeObjectURL(u));
+
+      setUploadedFiles(limited);
+      const urls = limited.map((f) => URL.createObjectURL(f));
+      setPreviewUrls(urls);
+      previewUrlsRef.current = urls;
+    },
+    [uploadedFiles]
+  );
+
+  const removeFile = (index: number) => {
+    URL.revokeObjectURL(previewUrls[index]);
+    const newFiles = uploadedFiles.filter((_, i) => i !== index);
+    const newUrls  = previewUrls.filter((_, i) => i !== index);
+    setUploadedFiles(newFiles);
+    setPreviewUrls(newUrls);
+    previewUrlsRef.current = newUrls;
+  };
+  // ────────────────────────────────────────────────────────────
+
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const featuresArr = formData.features
-      .split(",")
-      .map((f) => f.trim())
-      .filter(Boolean);
-    const colorsArr = formData.colors
-      .split(",")
-      .map((c) => c.trim())
-      .filter(Boolean);
+    const featuresArr = formData.features.split(",").map((f) => f.trim()).filter(Boolean);
+    const colorsArr   = formData.colors.split(",").map((c) => c.trim()).filter(Boolean);
+
+    // ── Çoklu görsel yükleme (Promise.all) ──────────────────
+    let imageUrls: string[] = [];
+
+    if (uploadedFiles.length > 0) {
+      try {
+        const uploadTasks = uploadedFiles.map((file) => {
+          const storageRef = ref(
+            storage,
+            `products/${Date.now()}_${Math.random().toString(36).slice(2)}_${file.name}`
+          );
+          return uploadBytes(storageRef, file).then((snap) => getDownloadURL(snap.ref));
+        });
+        imageUrls = await Promise.all(uploadTasks);
+      } catch (uploadError) {
+        console.error("Görsel yüklenemedi:", uploadError);
+        fireToast("Görseller yüklenirken hata oluştu.", "warning");
+        return;
+      }
+    }
+    // ────────────────────────────────────────────────────────
 
     if (editingProduct) {
-      // Düzenleme modu
       try {
         const updateData: Record<string, unknown> = {
-          name: formData.name,
-          price: Number(formData.price),
+          name:        formData.name,
+          price:       Number(formData.price),
           description: formData.description,
-          category: formData.category,
-          features: featuresArr.length > 0 ? featuresArr : editingProduct.features,
-          colors: colorsArr.length > 0 ? colorsArr : editingProduct.colors,
+          category:    formData.category,
+          features:    featuresArr.length > 0 ? featuresArr : editingProduct.features,
+          colors:      colorsArr.length   > 0 ? colorsArr   : editingProduct.colors,
         };
-        if (uploadedFile) {
-          const storageRef = ref(storage, `products/${Date.now()}_${uploadedFile.name}`);
-          const snap = await uploadBytes(storageRef, uploadedFile);
-          updateData.images = [await getDownloadURL(snap.ref)];
-        }
+        // Yeni görsel seçildiyse güncelle, seçilmediyse mevcut kalsın
+        if (imageUrls.length > 0) updateData.images = imageUrls;
+
         await updateDoc(doc(db, "products", editingProduct.id), updateData);
         fireToast("Ürün başarıyla güncellendi");
       } catch (error) {
         console.error("Ürün güncellenemedi:", error);
+        fireToast("Ürün güncellenirken hata oluştu.", "warning");
       }
     } else {
-      // Yeni ürün ekleme
-      let imageUrl = "";
-      if (uploadedFile) {
-        try {
-          const storageRef = ref(storage, `products/${Date.now()}_${uploadedFile.name}`);
-          const snap = await uploadBytes(storageRef, uploadedFile);
-          imageUrl = await getDownloadURL(snap.ref);
-        } catch (uploadError) {
-          console.error("Görsel yüklenemedi:", uploadError);
-        }
-      }
-
       const newProduct = {
-        stockCode: formData.stockCode,
-        name: formData.name,
-        price: Number(formData.price),
-        images: [imageUrl],
-        category: formData.category,
+        stockCode:   formData.stockCode,
+        name:        formData.name,
+        price:       Number(formData.price),
+        images:      imageUrls.length > 0 ? imageUrls : [],
+        category:    formData.category,
         description: formData.description || "Henüz açıklama eklenmedi.",
-        features: featuresArr.length > 0 ? featuresArr : ["Yeni Ürün"],
-        colors: colorsArr.length > 0 ? colorsArr : ["Standart"],
-        featured: false,
+        features:    featuresArr.length > 0 ? featuresArr : ["Yeni Ürün"],
+        colors:      colorsArr.length   > 0 ? colorsArr   : ["Standart"],
+        featured:    false,
       };
-
       try {
         await addDoc(collection(db, "products"), newProduct);
         fireToast("Ürün başarıyla eklendi");
       } catch (error) {
         console.error("Ürün eklenemedi:", error);
+        fireToast("Ürün eklenirken hata oluştu.", "warning");
       }
     }
 
@@ -255,26 +295,19 @@ export default function AdminUrunlerPage() {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) {
-      setUploadedFile(file);
-      setUploadedFileName(file.name);
-    }
+    handleFiles(Array.from(e.dataTransfer.files));
   };
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setUploadedFile(file);
-      setUploadedFileName(file.name);
-    }
+    handleFiles(Array.from(e.target.files ?? []));
+    e.target.value = ""; // Aynı dosyayı tekrar seçebilmek için input'u sıfırla
   };
 
   const featuredProducts = products.filter((p) => p.featured);
 
   const handleToggleFeatured = async (product: Product) => {
     if (!product.featured && featuredProducts.length >= 4) {
-      fireToast("Öne çıkan alanda en fazla 4 ürün olabilir.");
+      fireToast("Öne çıkan alanda en fazla 4 ürün olabilir.", "warning");
       return;
     }
     try {
@@ -287,7 +320,7 @@ export default function AdminUrunlerPage() {
   const handleSeedProducts = async () => {
     const snap = await getDocs(collection(db, "products"));
     if (!snap.empty) {
-      fireToast("Firebase'de zaten ürün var, yükleme atlandı.");
+      fireToast("Firebase'de zaten ürün var, yükleme atlandı.", "warning");
       return;
     }
     setIsSeeding(true);
@@ -308,13 +341,18 @@ export default function AdminUrunlerPage() {
 
   return (
     <div className="p-8 md:p-12 w-full relative">
+
       {/* ═══ Toast ═══ */}
       <div
-        className={`fixed top-6 right-6 z-[200] flex items-center gap-3 bg-white border border-green-200 shadow-xl rounded-2xl px-6 py-4 transition-all duration-500 ${
+        className={`fixed top-6 right-6 z-[200] flex items-center gap-3 border shadow-xl rounded-2xl px-6 py-4 transition-all duration-500 ${
           showToast ? "translate-y-0 opacity-100" : "-translate-y-4 opacity-0 pointer-events-none"
+        } ${
+          toastType === "warning"
+            ? "bg-amber-50 border-amber-200"
+            : "bg-white border-green-200"
         }`}
       >
-        <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
+        <CheckCircle2 className={`w-5 h-5 flex-shrink-0 ${toastType === "warning" ? "text-amber-500" : "text-green-500"}`} />
         <span className="text-sm font-medium text-zinc-900">{toastMsg}</span>
       </div>
 
@@ -337,7 +375,6 @@ export default function AdminUrunlerPage() {
               {isSeeding ? "Yükleniyor..." : "Varsayılan Ürünleri Yükle"}
             </button>
           )}
-
           <button
             onClick={openAddForm}
             className="flex items-center gap-2 bg-zinc-900 text-white px-6 py-3.5 rounded-xl font-semibold text-sm hover:bg-black transition-colors focus:outline-none focus:ring-4 focus:ring-zinc-300 shadow-md"
@@ -439,17 +476,17 @@ export default function AdminUrunlerPage() {
                 <tr key={i} className="animate-pulse">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-zinc-100"></div>
+                      <div className="w-12 h-12 rounded-xl bg-zinc-100" />
                       <div className="space-y-2">
-                        <div className="h-4 bg-zinc-200 rounded w-24"></div>
-                        <div className="h-3 bg-zinc-100 rounded w-16"></div>
+                        <div className="h-4 bg-zinc-200 rounded w-24" />
+                        <div className="h-3 bg-zinc-100 rounded w-16" />
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 hidden md:table-cell"><div className="h-6 bg-zinc-100 rounded-full w-20"></div></td>
-                  <td className="px-6 py-4 hidden lg:table-cell"><div className="flex gap-1.5"><div className="w-12 h-5 bg-zinc-100 rounded-full"></div><div className="w-12 h-5 bg-zinc-100 rounded-full"></div></div></td>
-                  <td className="px-6 py-4 text-right"><div className="h-5 bg-zinc-200 rounded w-16 ml-auto"></div></td>
-                  <td className="px-6 py-4"><div className="flex items-center justify-center gap-2"><div className="w-8 h-8 bg-zinc-100 rounded-lg"></div><div className="w-8 h-8 bg-zinc-100 rounded-lg"></div><div className="w-8 h-8 bg-zinc-100 rounded-lg"></div></div></td>
+                  <td className="px-6 py-4 hidden md:table-cell"><div className="h-6 bg-zinc-100 rounded-full w-20" /></td>
+                  <td className="px-6 py-4 hidden lg:table-cell"><div className="flex gap-1.5"><div className="w-12 h-5 bg-zinc-100 rounded-full" /><div className="w-12 h-5 bg-zinc-100 rounded-full" /></div></td>
+                  <td className="px-6 py-4 text-right"><div className="h-5 bg-zinc-200 rounded w-16 ml-auto" /></td>
+                  <td className="px-6 py-4"><div className="flex items-center justify-center gap-2"><div className="w-8 h-8 bg-zinc-100 rounded-lg" /><div className="w-8 h-8 bg-zinc-100 rounded-lg" /><div className="w-8 h-8 bg-zinc-100 rounded-lg" /></div></td>
                 </tr>
               ))
             ) : products.length === 0 ? (
@@ -470,8 +507,16 @@ export default function AdminUrunlerPage() {
               <tr key={product.id} className="hover:bg-zinc-50/50 transition-colors">
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-zinc-100 overflow-hidden flex-shrink-0 relative">
-                      <Image src={product.images?.[0] || "/zenna.png"} alt={product.name} fill className="object-cover" />
+                    {/* Ürün küçük resmi — birden fazla görsel varsa sağda "+" badge */}
+                    <div className="relative w-12 h-12 flex-shrink-0">
+                      <div className="w-12 h-12 rounded-xl bg-zinc-100 overflow-hidden relative">
+                        <Image src={product.images?.[0] || "/zenna.png"} alt={product.name} fill className="object-cover" />
+                      </div>
+                      {(product.images?.length ?? 0) > 1 && (
+                        <span className="absolute -bottom-1 -right-1 text-[9px] font-bold bg-zinc-900 text-white rounded-full w-4 h-4 flex items-center justify-center">
+                          {product.images.length}
+                        </span>
+                      )}
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-zinc-900 truncate">{product.name}</p>
@@ -497,7 +542,7 @@ export default function AdminUrunlerPage() {
                 <td className="px-6 py-4 text-center hidden md:table-cell">
                   <button
                     onClick={() => handleToggleFeatured(product)}
-                    title={product.featured ? "Öne çıkandan kaldır" : featuredProducts.length >= 4 ? "Maksimum 4 ürün (önce birini kaldırın)" : "Öne çıkan yap"}
+                    title={product.featured ? "Öne çıkandan kaldır" : featuredProducts.length >= 4 ? "Maksimum 4 ürün" : "Öne çıkan yap"}
                     className={`p-1.5 rounded-lg transition-all ${
                       product.featured
                         ? "text-amber-500 hover:text-amber-600 bg-amber-50 hover:bg-amber-100"
@@ -509,22 +554,13 @@ export default function AdminUrunlerPage() {
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex items-center justify-center gap-2">
-                    <button
-                      onClick={() => setDetailProduct(product)}
-                      className="text-xs text-blue-600 font-medium hover:text-blue-700 transition-colors px-2 py-1.5 rounded-lg hover:bg-blue-50"
-                    >
+                    <button onClick={() => setDetailProduct(product)} className="text-xs text-blue-600 font-medium hover:text-blue-700 transition-colors px-2 py-1.5 rounded-lg hover:bg-blue-50">
                       <Eye className="w-4 h-4" />
                     </button>
-                    <button
-                      onClick={() => openEditForm(product)}
-                      className="text-xs text-amber-600 font-medium hover:text-amber-700 transition-colors px-2 py-1.5 rounded-lg hover:bg-amber-50"
-                    >
+                    <button onClick={() => openEditForm(product)} className="text-xs text-amber-600 font-medium hover:text-amber-700 transition-colors px-2 py-1.5 rounded-lg hover:bg-amber-50">
                       <Pencil className="w-4 h-4" />
                     </button>
-                    <button
-                      onClick={() => setDeleteConfirm(product.id)}
-                      className="text-xs text-red-500 font-medium hover:text-red-600 transition-colors px-2 py-1.5 rounded-lg hover:bg-red-50"
-                    >
+                    <button onClick={() => setDeleteConfirm(product.id)} className="text-xs text-red-500 font-medium hover:text-red-600 transition-colors px-2 py-1.5 rounded-lg hover:bg-red-50">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
@@ -544,16 +580,10 @@ export default function AdminUrunlerPage() {
             <h3 className="text-lg font-bold text-zinc-900">Ürünü Silmek İstediğinize Emin Misiniz?</h3>
             <p className="text-sm text-zinc-500 font-light">Bu işlem geri alınamaz.</p>
             <div className="flex gap-3 pt-2">
-              <button
-                onClick={() => setDeleteConfirm(null)}
-                className="flex-1 py-3.5 rounded-xl text-sm font-medium text-zinc-600 hover:bg-zinc-50 border border-zinc-200 transition-colors"
-              >
+              <button onClick={() => setDeleteConfirm(null)} className="flex-1 py-3.5 rounded-xl text-sm font-medium text-zinc-600 hover:bg-zinc-50 border border-zinc-200 transition-colors">
                 Vazgeç
               </button>
-              <button
-                onClick={() => handleDelete(deleteConfirm)}
-                className="flex-1 py-3.5 rounded-xl text-sm font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors"
-              >
+              <button onClick={() => handleDelete(deleteConfirm)} className="flex-1 py-3.5 rounded-xl text-sm font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors">
                 Evet, Sil
               </button>
             </div>
@@ -566,8 +596,18 @@ export default function AdminUrunlerPage() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setDetailProduct(null)} />
           <div className="relative bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden">
-            <div className="relative w-full h-64 bg-zinc-100">
-              <Image src={detailProduct.images?.[0] || "/zenna.png"} alt={detailProduct.name} fill className="object-cover" />
+            {/* Görsel carousel — birden fazla resim varsa yan yana scroll */}
+            <div className="flex overflow-x-auto gap-0 snap-x snap-mandatory">
+              {(detailProduct.images?.length > 0 ? detailProduct.images : ["/zenna.png"]).map((src, i) => (
+                <div key={i} className="relative w-full flex-shrink-0 h-64 bg-zinc-100 snap-start">
+                  <Image src={src} alt={`${detailProduct.name} ${i + 1}`} fill className="object-cover" />
+                  {detailProduct.images?.length > 1 && (
+                    <span className="absolute bottom-3 right-3 text-[10px] font-bold bg-black/50 text-white px-2 py-0.5 rounded-full">
+                      {i + 1} / {detailProduct.images.length}
+                    </span>
+                  )}
+                </div>
+              ))}
             </div>
             <div className="p-8 space-y-4">
               <div className="flex items-start justify-between">
@@ -586,17 +626,11 @@ export default function AdminUrunlerPage() {
                 ))}
               </div>
               <div className="flex gap-3 pt-4">
-                <button
-                  onClick={() => openEditForm(detailProduct)}
-                  className="flex-1 bg-zinc-900 text-white py-3.5 rounded-xl font-medium hover:bg-black transition-colors flex items-center justify-center gap-2"
-                >
+                <button onClick={() => openEditForm(detailProduct)} className="flex-1 bg-zinc-900 text-white py-3.5 rounded-xl font-medium hover:bg-black transition-colors flex items-center justify-center gap-2">
                   <Pencil className="w-4 h-4" />
                   Düzenle
                 </button>
-                <button
-                  onClick={() => setDetailProduct(null)}
-                  className="px-6 py-3.5 rounded-xl text-sm font-medium text-zinc-600 hover:bg-zinc-50 border border-zinc-200 transition-colors"
-                >
+                <button onClick={() => setDetailProduct(null)} className="px-6 py-3.5 rounded-xl text-sm font-medium text-zinc-600 hover:bg-zinc-50 border border-zinc-200 transition-colors">
                   Kapat
                 </button>
               </div>
@@ -630,51 +664,94 @@ export default function AdminUrunlerPage() {
         </div>
 
         <form id="product-form" onSubmit={handleFormSubmit} className="flex-1 overflow-y-auto px-8 py-8 space-y-6">
-          {/* Görsel Yükleme */}
-          <div>
-            <label className="block text-sm font-medium text-zinc-700 mb-2">Ürün Görseli</label>
 
-            {/* Mevcut görsel önizleme — sadece düzenleme modunda */}
-            {editingProduct && editingProduct.images?.[0] && !uploadedFileName && (
-              <div className="relative w-full h-36 rounded-xl overflow-hidden mb-3 bg-zinc-100">
-                <Image src={editingProduct.images[0]} alt={editingProduct.name} fill className="object-contain" />
-                <div className="absolute bottom-0 left-0 right-0 bg-black/30 py-1 px-2">
-                  <span className="text-[10px] text-white/80 font-medium">Mevcut görsel — değiştirmek için aşağıya yükleyin</span>
+          {/* ── Çoklu Görsel Yükleme ─────────────────────────────── */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <label className="block text-sm font-medium text-zinc-700">
+                Ürün Görselleri
+              </label>
+              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full transition-colors ${
+                uploadedFiles.length >= MAX_IMAGES
+                  ? "bg-red-100 text-red-600"
+                  : "bg-zinc-100 text-zinc-500"
+              }`}>
+                {uploadedFiles.length} / {MAX_IMAGES}
+              </span>
+            </div>
+
+            {/* Düzenleme modunda mevcut görseller (yeni seçim yoksa göster) */}
+            {editingProduct && (editingProduct.images?.length ?? 0) > 0 && uploadedFiles.length === 0 && (
+              <div className="mb-4">
+                <p className="text-[10px] text-zinc-400 uppercase tracking-wider font-semibold mb-2">
+                  Mevcut Görseller
+                </p>
+                <div className="flex gap-2 flex-wrap">
+                  {editingProduct.images.map((url, i) => (
+                    <div key={i} className="relative w-20 h-20 rounded-xl overflow-hidden border border-zinc-200 bg-zinc-100">
+                      <Image src={url} alt={`Görsel ${i + 1}`} fill className="object-cover" />
+                    </div>
+                  ))}
                 </div>
+                <p className="text-[10px] text-zinc-400 mt-2">
+                  Yeni görsel yüklerseniz mevcut görseller değiştirilir.
+                </p>
               </div>
             )}
 
-            <div
-              onDragEnter={handleDrag}
-              onDragOver={handleDrag}
-              onDragLeave={handleDrag}
-              onDrop={handleDrop}
-              className={`relative w-full h-40 rounded-2xl border-2 border-dashed transition-all flex flex-col items-center justify-center gap-3 cursor-pointer ${
-                dragActive
-                  ? "border-blue-400 bg-blue-50/50"
-                  : uploadedFileName
-                  ? "border-green-300 bg-green-50/30"
-                  : "border-zinc-200 bg-zinc-50 hover:border-zinc-300 hover:bg-zinc-100/50"
-              }`}
-            >
-              <input type="file" accept="image/*" onChange={handleFileInput} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-              {uploadedFileName ? (
-                <>
-                  <CheckCircle2 className="w-7 h-7 text-green-500" />
-                  <span className="text-sm text-green-700 font-medium">{uploadedFileName}</span>
-                  <span className="text-xs text-zinc-400">Değiştirmek için tekrar tıklayın</span>
-                </>
-              ) : (
-                <>
-                  <Upload className={`w-7 h-7 ${dragActive ? "text-blue-500" : "text-zinc-400"}`} />
-                  <span className="text-sm text-zinc-500 font-medium">
-                    {editingProduct ? "Yeni Görsel Yükle" : "Görsel Sürükle veya Seç"}
-                  </span>
-                  <span className="text-xs text-zinc-400">PNG, JPG, WEBP — Maks 5MB</span>
-                </>
-              )}
-            </div>
+            {/* Seçilen yeni görsellerin önizlemesi */}
+            {previewUrls.length > 0 && (
+              <div className="flex gap-2 flex-wrap mb-3">
+                {previewUrls.map((url, i) => (
+                  <div key={i} className="relative w-20 h-20 rounded-xl overflow-hidden border border-blue-200 bg-zinc-100 group">
+                    <Image src={url} alt={`Yeni ${i + 1}`} fill className="object-cover" />
+                    {/* Kaldır butonu */}
+                    <button
+                      type="button"
+                      onClick={() => removeFile(i)}
+                      className="absolute top-1 right-1 w-5 h-5 bg-black/60 hover:bg-red-600 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
+                    >
+                      <X className="w-3 h-3 text-white" />
+                    </button>
+                    <span className="absolute bottom-1 left-1 text-[9px] font-bold bg-black/50 text-white px-1 rounded">
+                      {i + 1}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Drop zone — slot dolmamışsa göster */}
+            {uploadedFiles.length < MAX_IMAGES && (
+              <div
+                onDragEnter={handleDrag}
+                onDragOver={handleDrag}
+                onDragLeave={handleDrag}
+                onDrop={handleDrop}
+                className={`relative w-full h-36 rounded-2xl border-2 border-dashed transition-all flex flex-col items-center justify-center gap-2 cursor-pointer ${
+                  dragActive
+                    ? "border-blue-400 bg-blue-50/50"
+                    : "border-zinc-200 bg-zinc-50 hover:border-zinc-300 hover:bg-zinc-100/50"
+                }`}
+              >
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleFileInput}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                />
+                <ImagePlus className={`w-6 h-6 ${dragActive ? "text-blue-500" : "text-zinc-400"}`} />
+                <span className="text-sm text-zinc-500 font-medium">
+                  {uploadedFiles.length === 0 ? "Görsel Sürükle veya Seç" : "Daha fazla görsel ekle"}
+                </span>
+                <span className="text-xs text-zinc-400">
+                  PNG, JPG, WEBP — Maks {MAX_IMAGES - uploadedFiles.length} görsel daha
+                </span>
+              </div>
+            )}
           </div>
+          {/* ─────────────────────────────────────────────────────── */}
 
           {/* Ürün Adı */}
           <div>
